@@ -193,10 +193,64 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  // ── POST /explore/posts/:id/rsvp (alias — FE compat) ─────────────────────
+  app.post<{ Params: { id: string } }>(
+    "/explore/posts/:id/rsvp",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+      schema: {
+        params: {
+          type:       "object",
+          required:   ["id"],
+          properties: { id: { type: "string" } },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await exploreService.rsvpEvent(
+          request.params.id,
+          request.user.uid,
+        );
+        return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
   // ── POST /explore/groups/:id/join ─────────────────────────────────────────
   // Toggle join/leave sebuah group post. Returns { joined: boolean, members: number }.
   app.post<{ Params: { id: string } }>(
     "/explore/groups/:id/join",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+      schema: {
+        params: {
+          type:       "object",
+          required:   ["id"],
+          properties: { id: { type: "string" } },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await exploreService.joinGroup(
+          request.params.id,
+          request.user.uid,
+        );
+        return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── POST /explore/posts/:id/join (alias — FE compat) ────────────────────
+  app.post<{ Params: { id: string } }>(
+    "/explore/posts/:id/join",
     {
       preHandler: authenticate,
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
@@ -355,6 +409,34 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
         const result = await exploreService.purchaseProduct(
           request.user.uid,
           request.body.productId,
+        );
+        return reply.code(201).send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── POST /explore/shop/:productId/purchase (alias — FE compat) ───────────
+  // FE memanggil /explore/shop/{productId}/purchase dengan param di URL.
+  app.post<{ Params: { productId: string } }>(
+    "/explore/shop/:productId/purchase",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+      schema: {
+        params: {
+          type:       "object",
+          required:   ["productId"],
+          properties: { productId: { type: "string" } },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await exploreService.purchaseProduct(
+          request.user.uid,
+          request.params.productId,
         );
         return reply.code(201).send(result);
       } catch (err) {

@@ -11,6 +11,10 @@ import { userRoutes } from "./routes/user.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { scanRoutes } from "./routes/scan.js";
 import { chatRoutes } from "./routes/chat.js";
+import { exploreRoutes } from "./routes/explore.js";
+import { dietRoutes } from "./routes/diet.js";
+import { trainingRoutes } from "./routes/training.js";
+import { notificationRoutes } from "./routes/notifications.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -85,6 +89,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes);
   await app.register(chatRoutes);
   await app.register(scanRoutes, { prefix: "/scan" });
+  await app.register(exploreRoutes);
+  await app.register(dietRoutes);
+  await app.register(trainingRoutes);
+  await app.register(notificationRoutes);
 
   return app;
 }
