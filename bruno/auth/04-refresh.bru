@@ -1,0 +1,30 @@
+meta {
+  name: Refresh Token
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/auth/refresh
+  body: none
+  auth: none
+}
+
+# Catatan: refresh_token dikirim otomatis via HttpOnly cookie (path=/auth/refresh)
+# Browser/Bruno akan attach cookie ini secara otomatis jika sudah login sebelumnya
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setEnvVar("accessToken", res.body.accessToken);
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("accessToken baru diterima", function() {
+    expect(res.body.accessToken).to.be.a("string");
+  });
+}

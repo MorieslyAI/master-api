@@ -1,0 +1,35 @@
+meta {
+  name: Get Full Profile
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/user/profile
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("userId ada di response", function() {
+    expect(res.body.userId).to.be.a("string");
+  });
+
+  test("isCalibrationComplete true setelah kalibrasi", function() {
+    expect(res.body.isCalibrationComplete).to.equal(true);
+  });
+
+  test("data profil kalibrasi tersedia", function() {
+    expect(res.body.profile).to.be.an("object");
+    expect(res.body.profile.sugarLimit).to.be.a("number");
+    expect(res.body.profile.medicalConditions).to.be.an("array");
+  });
+}

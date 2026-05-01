@@ -1,0 +1,48 @@
+services:
+
+  # ── Master API ──────────────────────────────────────────────────────────────
+  master-api:
+    build: .
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: "4000"
+      HOST: "0.0.0.0"
+      REDIS_URL: "redis://redis:6379"
+      # Isi variabel berikut via file .env atau environment CI/CD
+      JWT_SECRET:             ${JWT_SECRET}
+      JWT_SOCKET_SECRET:      ${JWT_SOCKET_SECRET}
+      FIREBASE_PROJECT_ID:    ${FIREBASE_PROJECT_ID}
+      FIREBASE_CLIENT_EMAIL:  ${FIREBASE_CLIENT_EMAIL}
+      FIREBASE_PRIVATE_KEY:   ${FIREBASE_PRIVATE_KEY}
+      CORS_ORIGIN:            ${CORS_ORIGIN:-http://localhost:3000}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # Jalankan 3 replicas di production (uncomment jika pakai Docker Swarm)
+    # deploy:
+    #   replicas: 3
+
+  # ── Redis ───────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test:     ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout:  5s
+      retries:  5
+    restart: unless-stopped
+
+volumes:
+  redis-data:

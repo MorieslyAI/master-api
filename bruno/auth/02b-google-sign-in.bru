@@ -1,0 +1,59 @@
+meta {
+  name: Google Sign-In
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/google
+  body: json
+  auth: none
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cara mendapatkan idToken dan refreshToken untuk testing:
+#
+# 1. Buka Firebase Console → Authentication → Users → Add User (untuk test manual)
+#
+# 2. Atau jalankan snippet berikut di browser console (pastikan Firebase sudah init):
+#
+#    import { getAuth, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+#    const provider = new GoogleAuthProvider();
+#    const result = await signInWithPopup(getAuth(), provider);
+#    const idToken = await result.user.getIdToken();
+#    const refreshToken = result.user.refreshToken;
+#    console.log({ idToken, refreshToken });
+#
+# 3. Gunakan Firebase Auth Emulator untuk testing lokal tanpa akun Google asli.
+# ─────────────────────────────────────────────────────────────────────────────
+
+body:json {
+  {
+    "idToken": "PASTE_FIREBASE_ID_TOKEN_HERE",
+    "refreshToken": "PASTE_FIREBASE_REFRESH_TOKEN_HERE"
+  }
+}
+
+script:post-response {
+  if (res.status === 200 || res.status === 201) {
+    bru.setEnvVar("accessToken", res.body.accessToken);
+  }
+}
+
+tests {
+  test("status 200 (returning user) atau 201 (user baru)", function() {
+    expect([200, 201]).to.include(res.status);
+  });
+
+  test("accessToken ada di response", function() {
+    expect(res.body.accessToken).to.be.a("string");
+  });
+
+  test("expiresIn = 3600 (1 jam)", function() {
+    expect(res.body.expiresIn).to.equal(3600);
+  });
+
+  test("isNewUser ada di response", function() {
+    expect(res.body.isNewUser).to.be.a("boolean");
+  });
+}

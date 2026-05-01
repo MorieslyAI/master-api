@@ -1,0 +1,35 @@
+meta {
+  name: Socket Token
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/auth/socket-token
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "scope": "all"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("socketToken ada di response", function() {
+    expect(res.body.socketToken).to.be.a("string");
+  });
+
+  test("scope sesuai", function() {
+    expect(res.body.scope).to.equal("all");
+  });
+}

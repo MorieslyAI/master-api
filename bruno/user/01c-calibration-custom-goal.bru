@@ -1,0 +1,40 @@
+meta {
+  name: Save Calibration (Custom Sugar Limit)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/user/calibration
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Contoh payload: goal custom dengan manual override sugar limit
+body:json {
+  {
+    "name": "Andi Pratama",
+    "gender": "male",
+    "age": 35,
+    "height": 175,
+    "weight": 80,
+    "archetypeId": "heavy",
+    "medicalConditions": ["hypertension"],
+    "goalMode": "custom",
+    "customSugarLimit": 20
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("sugarLimit sesuai custom override = 20g", function() {
+    expect(res.body.sugarLimit).to.equal(20);
+  });
+}

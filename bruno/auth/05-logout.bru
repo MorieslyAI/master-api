@@ -1,0 +1,28 @@
+meta {
+  name: Logout
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/auth/logout
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Firebase Auth: logout akan me-revoke SEMUA refresh token user di server.
+# Cookie refresh_token juga dihapus otomatis.
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("pesan berhasil logout", function() {
+    expect(res.body.message).to.include("logout");
+  });
+}

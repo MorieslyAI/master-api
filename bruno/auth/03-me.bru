@@ -1,0 +1,29 @@
+meta {
+  name: Get Me (Profile Auth)
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/auth/me
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+  
+  test("userId ada di response", function() {
+    expect(res.body.userId).to.be.a("string");
+  });
+  
+  test("isCalibrationComplete ada di response", function() {
+    expect(res.body.isCalibrationComplete).to.be.a("boolean");
+  });
+}

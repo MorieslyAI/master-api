@@ -1,0 +1,43 @@
+meta {
+  name: Save Calibration (Custom Archetype)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/user/calibration
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Contoh payload: Wanita, archetype custom, dengan kondisi medis diabetes
+body:json {
+  {
+    "name": "Sari Dewi",
+    "gender": "female",
+    "age": 30,
+    "height": 160,
+    "weight": 58,
+    "archetypeId": "custom",
+    "dailySteps": 8000,
+    "workoutFreq": 3,
+    "workoutIntensity": "mod",
+    "medicalConditions": ["diabetes"],
+    "goalMode": "maintain"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("sugarLimit sangat rendah karena diabetes", function() {
+    expect(res.body.sugarLimit).to.be.a("number");
+    expect(res.body.sugarLimit).to.be.at.most(15);
+  });
+}
