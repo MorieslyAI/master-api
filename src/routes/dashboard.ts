@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import {
   dashboardService,
   type DashboardQueryStats,
+  type TimeRange,
 } from "../services/dashboard.service.js";
 import { authenticate } from "../middleware/authenticate.js";
 
@@ -154,6 +155,41 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
           stats,
         );
         return reply.send(metrics);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── GET /dashboard/range-metrics ──────────────────────────────────────────
+  // Mengembalikan metabolicTrend dan energyTrend untuk range waktu tertentu.
+  // Query param: range (30S | 1M | 15M | 1H | 24H | 7D | 30D)
+  app.get<{ Querystring: { range: TimeRange } }>(
+    "/dashboard/range-metrics",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["range"],
+          properties: {
+            range: {
+              type: "string",
+              enum: ["30S", "1M", "15M", "1H", "24H", "7D", "30D"],
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await dashboardService.getRangeMetrics(
+          request.user.uid,
+          request.query.range,
+        );
+        return reply.send(result);
       } catch (err) {
         return handleError(err, reply);
       }

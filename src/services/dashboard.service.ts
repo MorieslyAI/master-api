@@ -1,5 +1,22 @@
 import { getDb } from "../lib/firebase.js";
 
+// ─── Time Range Helper ────────────────────────────────────────────────────────
+
+export type TimeRange = "30S" | "1M" | "15M" | "1H" | "24H" | "7D" | "30D";
+
+function timeRangeToMs(range: TimeRange): number {
+  const map: Record<TimeRange, number> = {
+    "30S": 30 * 1000,
+    "1M":  60 * 1000,
+    "15M": 15 * 60 * 1000,
+    "1H":  60 * 60 * 1000,
+    "24H": 24 * 60 * 60 * 1000,
+    "7D":  7  * 24 * 60 * 60 * 1000,
+    "30D": 30 * 24 * 60 * 60 * 1000,
+  };
+  return map[range];
+}
+
 // ─── Firestore Collection ─────────────────────────────────────────────────────
 const COL_USERS = "users";
 
@@ -554,5 +571,59 @@ export const dashboardService = {
       dailyDirective,
       metabolicInsight,
     };
+  },
+
+  // ── GET /dashboard/range-metrics logic ─────────────────────────────────────
+  // Menghitung metabolicTrend dan energyTrend berdasarkan log dalam rentang waktu.
+  async getRangeMetrics(
+    userId: string,
+    range: TimeRange,
+  ): Promise<{ timeRange: TimeRange; metabolicTrend: number; energyTrend: number }> {
+    const db = getDb();
+    const sinceMs = Date.now() - timeRangeToMs(range);
+    const sinceIso = new Date(sinceMs).toISOString();
+
+    // Ambil log user sejak tanggal paling awal dalam rentang (filter di memori)
+    // Untuk range pendek (30S–1H) kita tetap pakai filter date=hari ini agar tidak scan seluruh koleksi
+    const sinceDate = new Date(sinceMs).toISOString().split("T")[0];
+    const snapshot = await db
+      .collection(COL_USERS)
+      .doc(userId)
+      .collection("logs")
+      .where("date", ">=", sinceDate)
+      .get();
+
+    let totalCalories = 0;
+    let totalSugar = 0;
+    let totalProtein = 0;
+    let count = 0;
+
+    snapshot.forEach((docLog) => {
+      const log = docLog.data();
+      // Filter lebih presisi di memori berdasarkan timestamp ISO
+      if (log.timestamp && log.timestamp < sinceIso) return;
+
+      if (log.type === "food" || log.type === "drink") {
+        totalCalories += Number(log.calories) || 0;
+        totalSugar    += Number(log.sugar)    || 0;
+        totalProtein  += Number(log.protein)  || 0;
+        count++;
+      }
+    });
+
+    // metabolicTrend: 0–100 berdasarkan rasio kalori yang masuk vs. ekspektasi dasar
+    // Estimasi sederhana: 2000 kcal/hari = 100 poin baseline
+    const rangeHours = timeRangeToMs(range) / (1000 * 60 * 60);
+    const expectedCalories = (2000 / 24) * rangeHours; // rata-rata per jam
+    const metabolicTrend = count === 0
+      ? 50 // netral jika tidak ada data
+      : Math.round(Math.min(100, Math.max(0, (totalCalories / Math.max(1, expectedCalories)) * 70 + (totalSugar < 10 ? 30 : 0))));
+
+    // energyTrend: 0–100 berdasarkan protein intake vs. sugar load
+    const energyTrend = count === 0
+      ? 60 // sedikit optimistis saat tidak ada data
+      : Math.round(Math.min(100, Math.max(0, (totalProtein * 2.5) - (totalSugar * 0.5) + 50)));
+
+    return { timeRange: range, metabolicTrend, energyTrend };
   },
 };
