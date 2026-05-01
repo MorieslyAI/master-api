@@ -328,4 +328,224 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
       }
     },
   );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ALIAS ROUTES — FE compat (/diet/plans/...)
+  // FE memanggil path /diet/plans/*, BE lama menggunakan /diet/*.
+  // Alias ini mendelegasikan ke service yang sama tanpa mengubah logika.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── POST /diet/plans/daily (alias → /diet/generate) ───────────────────────
+  app.post<{ Body: GenerateDailyBody }>(
+    "/diet/plans/daily",
+    {
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+      schema: {
+        body: {
+          type: "object",
+          required: ["category", "inputMode", "userProfile"],
+          properties: {
+            category:   { type: "string" },
+            manualGoal: { type: "string" },
+            inputMode:  { type: "string", enum: ["auto", "manual"] },
+            userProfile: {
+              type: "object",
+              required: ["name", "age", "weight"],
+              properties: {
+                name:   { type: "string", minLength: 1 },
+                age:    { type: "number", minimum: 1 },
+                weight: { type: "number", minimum: 1 },
+                height: { type: "number", minimum: 1 },
+              },
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { category, manualGoal, inputMode, userProfile } = request.body;
+        const cat = DIET_CATEGORIES[category];
+        const goalText =
+          inputMode === "auto" && cat
+            ? `${cat.title} (${cat.desc}). Strict adherence.`
+            : (manualGoal ?? "Healthy balanced diet");
+        const plan = await dietService.generateAndSaveDailyPlan(
+          request.user.uid,
+          category,
+          {
+            goalText,
+            userName:   userProfile.name,
+            userAge:    userProfile.age,
+            userWeight: userProfile.weight,
+            userHeight: userProfile.height ?? 170,
+          },
+        );
+        return reply.send(plan);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── POST /diet/plans/weekly (alias → /diet/weekly) ────────────────────────
+  app.post<{ Body: GenerateWeeklyBody }>(
+    "/diet/plans/weekly",
+    {
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+      schema: {
+        body: {
+          type: "object",
+          required: ["category", "inputMode", "userProfile"],
+          properties: {
+            category:   { type: "string" },
+            manualGoal: { type: "string" },
+            inputMode:  { type: "string", enum: ["auto", "manual"] },
+            userProfile: {
+              type: "object",
+              required: ["name", "age", "weight"],
+              properties: {
+                name:   { type: "string", minLength: 1 },
+                age:    { type: "number", minimum: 1 },
+                weight: { type: "number", minimum: 1 },
+              },
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { category, manualGoal, inputMode, userProfile } = request.body;
+        const cat = DIET_CATEGORIES[category];
+        const goalText =
+          inputMode === "auto" && cat
+            ? `${cat.title} (${cat.desc}). Focus on meal prep efficiency.`
+            : (manualGoal ?? "Healthy balanced diet");
+        const plan = await dietService.generateAndSaveWeeklyPlan(
+          request.user.uid,
+          category,
+          {
+            goalText,
+            userName:   userProfile.name,
+            userAge:    userProfile.age,
+            userWeight: userProfile.weight,
+          },
+        );
+        return reply.send(plan);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── GET /diet/plans/active (alias → /diet/active) ─────────────────────────
+  app.get(
+    "/diet/plans/active",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      try {
+        const plans = await dietService.getActivePlans(request.user.uid);
+        return reply.send(plans);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── POST /diet/plans/daily/:planId/swap (alias → /diet/swap) ─────────────
+  // FE mengirim planId di URL param, target di body field "target".
+  app.post<{
+    Params: { planId: string };
+    Body: { mealIndex: number; currentMeal: MealItem; target: string };
+  }>(
+    "/diet/plans/daily/:planId/swap",
+    {
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+      schema: {
+        params: {
+          type: "object",
+          required: ["planId"],
+          properties: { planId: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          required: ["mealIndex", "currentMeal", "target"],
+          properties: {
+            mealIndex:   { type: "number", minimum: 0 },
+            currentMeal: { type: "object" },
+            target:      { type: "string" },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { mealIndex, currentMeal, target } = request.body;
+        const planId = request.params.planId;
+
+        const newMeal = await dietService.swapMeal({ currentMeal, dietTarget: target });
+
+        const active = await dietService.getActivePlans(request.user.uid);
+        const dailyPlan = active.daily;
+        if (dailyPlan && dailyPlan.id === planId) {
+          const updatedMeals = [...dailyPlan.meals];
+          updatedMeals[mealIndex] = newMeal;
+          await dietService.updateDailyMeals(request.user.uid, planId, updatedMeals);
+        }
+
+        return reply.send(newMeal);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── POST /diet/plans/:planId/consume (alias → /diet/consumed) ────────────
+  // FE mengirim planId di URL param, scope & mealIndex di body.
+  app.post<{
+    Params: { planId: string };
+    Body: { scope: "daily" | "weekly"; mealIndex: number; dayIndex?: number };
+  }>(
+    "/diet/plans/:planId/consume",
+    {
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+      schema: {
+        params: {
+          type: "object",
+          required: ["planId"],
+          properties: { planId: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          required: ["scope", "mealIndex"],
+          properties: {
+            scope:     { type: "string", enum: ["daily", "weekly"] },
+            mealIndex: { type: "number", minimum: 0 },
+            dayIndex:  { type: "number", minimum: 0 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const { scope, mealIndex, dayIndex } = request.body;
+        const planId = request.params.planId;
+        await dietService.markMealConsumed(
+          request.user.uid,
+          planId,
+          scope,          // "daily" | "weekly"  (sama dengan planType)
+          mealIndex,
+          dayIndex,
+        );
+        return reply.code(200).send({ success: true });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
 }
