@@ -3,6 +3,7 @@ import {
   dashboardService,
   type DashboardQueryStats,
   type TimeRange,
+  type UserStatusResponse,
 } from "../services/dashboard.service.js";
 import { authenticate } from "../middleware/authenticate.js";
 
@@ -190,6 +191,43 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
           request.query.range,
         );
         return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── GET /dashboard/status ─────────────────────────────────────────────────
+  // Mengembalikan data lengkap untuk halaman Agent Status.
+  // Includes: profil, XP, performance score, diet adherence, alerts, trajectory.
+  app.get<{ Querystring: { date?: string } }>(
+    "/dashboard/status",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+      schema: {
+        querystring: {
+          type: "object",
+          properties: {
+            date: {
+              type: "string",
+              pattern: "^\\d{4}-\\d{2}-\\d{2}$",
+              description: "Format YYYY-MM-DD",
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const targetDate =
+          request.query.date || new Date().toISOString().split("T")[0];
+        const statusData = await dashboardService.getStatusData(
+          request.user.uid,
+          targetDate,
+        );
+        return reply.send(statusData);
       } catch (err) {
         return handleError(err, reply);
       }

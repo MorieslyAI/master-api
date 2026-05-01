@@ -80,6 +80,32 @@ export interface DashboardMetrics {
   metabolicInsight: MetabolicInsight;
 }
 
+export interface UserStatusAlert {
+  type: "danger" | "warning" | "info";
+  title: string;
+  message: string;
+}
+
+export interface UserStatusResponse {
+  // Profil & XP
+  name: string;
+  rankTitle: string;
+  level: number;
+  currentXp: number;
+  nextLevelXp: number;
+  streak: number;
+  weight: number | null;
+  // Performa
+  performanceScore: number;
+  dietAdherence: number;
+  // Alerts
+  activeAlerts: UserStatusAlert[];
+  // Mission trajectory
+  targetCalories: number;
+  caloriesConsumedToday: number;
+  nextEvaluation: string;
+}
+
 // ─── Error Helper ─────────────────────────────────────────────────────────────
 
 function httpError(message: string, statusCode: number): Error {
@@ -625,5 +651,101 @@ export const dashboardService = {
       : Math.round(Math.min(100, Math.max(0, (totalProtein * 2.5) - (totalSugar * 0.5) + 50)));
 
     return { timeRange: range, metabolicTrend, energyTrend };
+  },
+
+  // ── GET /dashboard/status logic ─────────────────────────────────────────────
+  // Mengembalikan data lengkap untuk halaman Agent Status:
+  // profil, XP, performance score, diet adherence, alerts aktif, mission trajectory.
+  async getStatusData(userId: string, dateStr: string): Promise<UserStatusResponse> {
+    const db = getDb();
+    const doc = await db.collection(COL_USERS).doc(userId).get();
+    if (!doc.exists) throw httpError("User tidak ditemukan.", 404);
+
+    const data = doc.data() as Record<string, any>;
+    const p = data["profile"] as StoredProfile | undefined;
+
+    // Ambil log hari ini untuk menghitung stats harian
+    const logsSnapshot = await db
+      .collection(COL_USERS)
+      .doc(userId)
+      .collection("logs")
+      .where("date", "==", dateStr)
+      .get();
+
+    let caloriesConsumed = 0;
+    let sugarConsumed = 0;
+    let totalSugarAllTime = 0;
+    let totalItems = 0;
+    const activeAlerts: Array<{ type: "danger" | "warning" | "info"; title: string; message: string }> = [];
+
+    logsSnapshot.forEach((docLog) => {
+      const log = docLog.data();
+      if (log.type === "food" || log.type === "drink") {
+        caloriesConsumed += Number(log.calories) || 0;
+        sugarConsumed += Number(log.sugar) || Number(log.sugarg) || 0;
+        totalSugarAllTime += Number(log.sugarg) || Number(log.sugar) || 0;
+        totalItems++;
+      }
+    });
+
+    const sugarLimit = p?.sugarLimit ?? 25;
+    const macroTargets = p ? computeMacroTargets(p) : { calories: 2000, protein: 120, carbs: 250, fat: 65, fiber: 25 };
+
+    // Hitung alerts aktif
+    const sugarDebt = Math.max(0, sugarConsumed - sugarLimit);
+    if (sugarDebt > 0) {
+      activeAlerts.push({
+        type: "danger",
+        title: "Sugar Debt Active",
+        message: `Kamu sudah melampaui ${Math.round(sugarDebt * 10) / 10}g batas gula hari ini. Lakukan aktivitas fisik ringan untuk membakarnya.`,
+      });
+    }
+
+    const medicalConditions: string[] = p?.medicalConditions ?? (data["medicalConditions"] ?? []);
+    if (medicalConditions.length > 0) {
+      activeAlerts.push({
+        type: "info",
+        title: "Medical Monitoring",
+        message: `Pemantauan aktif untuk: ${medicalConditions.join(", ")}.`,
+      });
+    }
+
+    // Performance score: 0–100
+    const level = data["level"] ?? 1;
+    const avgSugar = totalItems > 0 ? sugarConsumed / Math.max(totalItems, 1) : 0;
+    const performanceScore = Math.min(100, Math.max(0, Math.round(100 - (avgSugar * 2) + (level * 5))));
+
+    // Diet adherence: perbandingan kalori aktual vs target (0–100%)
+    const dietAdherence = macroTargets.calories > 0
+      ? Math.min(100, Math.round((caloriesConsumed / macroTargets.calories) * 100))
+      : 0;
+
+    // Next evaluation date: 7 hari dari sekarang
+    const nextEval = new Date();
+    nextEval.setDate(nextEval.getDate() + 7);
+    const nextEvalStr = `${nextEval.getDate()} ${nextEval.toLocaleString("id-ID", { month: "long" })} ${nextEval.getFullYear()}`;
+
+    return {
+      // Profile
+      name: data["displayName"] ?? "Agent",
+      rankTitle: data["rankTitle"] ?? "Rookie Agent",
+      level,
+      currentXp: data["currentXp"] ?? 0,
+      nextLevelXp: data["nextLevelXp"] ?? 100,
+      streak: data["streak"] ?? 0,
+      weight: p?.weight ?? null,
+
+      // Performance
+      performanceScore,
+      dietAdherence,
+
+      // Alerts
+      activeAlerts,
+
+      // Mission trajectory
+      targetCalories: macroTargets.calories,
+      caloriesConsumedToday: Math.round(caloriesConsumed),
+      nextEvaluation: nextEvalStr,
+    };
   },
 };
