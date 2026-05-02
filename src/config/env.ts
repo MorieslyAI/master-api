@@ -26,7 +26,9 @@ export const env = {
   // Firebase Admin SDK
   FIREBASE_PROJECT_ID: get("FIREBASE_PROJECT_ID"),
   FIREBASE_CLIENT_EMAIL: get("FIREBASE_CLIENT_EMAIL"),
-  FIREBASE_PRIVATE_KEY: get("FIREBASE_PRIVATE_KEY").replace(/\\n/g, "\n"),
+  FIREBASE_PRIVATE_KEY: get("FIREBASE_PRIVATE_KEY")
+    .replace(/^["']|["']$/g, "")
+    .replace(/\\n/g, "\n"),
 
   // Firebase Auth REST API key (dari Firebase Console → Project Settings → Web API Key)
   FIREBASE_API_KEY: get("FIREBASE_API_KEY"),
