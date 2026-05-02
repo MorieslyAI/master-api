@@ -39,10 +39,25 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(helmet, { contentSecurityPolicy: false });
 
   // ── CORS ───────────────────────────────────────────────────────────────────
+  const corsOrigins = env.CORS_ORIGIN.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const allowAllOrigins = corsOrigins.includes("*");
+  const allowedOrigins = new Set(corsOrigins.filter((origin) => origin !== "*"));
+
   await app.register(cors, {
-    origin: env.CORS_ORIGIN,
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true); // server-to-server / curl
+      }
+      if (allowAllOrigins || allowedOrigins.has(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`Origin tidak diizinkan: ${origin}`), false);
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   });
 
   // ── Cookie ─────────────────────────────────────────────────────────────────
