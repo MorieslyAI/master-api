@@ -49,9 +49,9 @@ substitutions:
   _MIN_INSTANCES: '0'
   _MAX_INSTANCES: '3'
   # Variable Placeholder (Wajib diisi di Cloud Build Trigger)
-  _NODE_ENV: 'production'
-  _PORT: '4000'
-  _HOST: '0.0.0.0'
+  _NODE_ENV: ''
+  _PORT: ''
+  _HOST: ''
   _SOCKET_TOKEN_EXPIRES_IN: ''
   _REFRESH_TOKEN_TTL_DAYS: ''
   _JWT_SOCKET_SECRET: ''
