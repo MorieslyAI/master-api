@@ -44,6 +44,31 @@ export interface CalibrationDTO {
   customSugarLimit?: number;  // hanya jika goalMode === 'custom'
 }
 
+// ─── Settings Update DTO ──────────────────────────────────────────────────────
+// Semua field optional — hanya field yang dikirim yang diupdate.
+
+export interface UpdateSettingsDTO {
+  // Identity
+  name?:               string;
+  gender?:             'male' | 'female';
+  age?:                number;
+  height?:             number;
+  weight?:             number;
+
+  // Engine
+  archetypeId?:        'desk' | 'field' | 'heavy' | 'custom';
+  goalMode?:           'cut' | 'maintain' | 'bulk' | 'custom';
+  customSugarLimit?:   number;
+
+  // Mission
+  eventName?:          string;
+  targetWeight?:       number;
+  targetDate?:         string;
+
+  // Account
+  isWearableConnected?: boolean;
+}
+
 export interface UserProfileResponse {
   userId:                string;
   email:                 string;
@@ -295,5 +320,78 @@ export const userService = {
       lastCheckInDate:  today,
       ...xpToSave,
     };
+  },
+
+  async updateSettings(userId: string, dto: UpdateSettingsDTO): Promise<{ sugarLimit?: number }> {
+    const db      = getDb();
+    const userRef = db.collection(COL_USERS).doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) throw httpError('User not found.', 404);
+
+    const data    = userDoc.data() as Record<string, any>;
+    const now     = Timestamp.now();
+    const updates: Record<string, any> = { updatedAt: now };
+
+    // ── Identity fields → merge into profile sub-document ────────────────────
+    const existingProfile = data['profile'] ?? {};
+    const profilePatch: Record<string, any> = {};
+
+    if (dto.name    !== undefined) { profilePatch['name']    = dto.name;    updates['displayName'] = dto.name; }
+    if (dto.gender  !== undefined)   profilePatch['gender']  = dto.gender;
+    if (dto.age     !== undefined)   profilePatch['age']     = dto.age;
+    if (dto.height  !== undefined)   profilePatch['height']  = dto.height;
+    if (dto.weight  !== undefined)   profilePatch['weight']  = dto.weight;
+
+    // ── Engine fields ─────────────────────────────────────────────────────────
+    if (dto.archetypeId      !== undefined) profilePatch['archetypeId']      = dto.archetypeId;
+    if (dto.goalMode         !== undefined) profilePatch['goalMode']         = dto.goalMode;
+    if (dto.customSugarLimit !== undefined) profilePatch['customSugarLimit'] = dto.customSugarLimit;
+
+    // ── Mission fields → stored in profile.mission ────────────────────────────
+    if (dto.eventName    !== undefined) profilePatch['mission.eventName']    = dto.eventName;
+    if (dto.targetWeight !== undefined) profilePatch['mission.targetWeight'] = dto.targetWeight;
+    if (dto.targetDate   !== undefined) profilePatch['mission.targetDate']   = dto.targetDate;
+
+    // ── Account fields ────────────────────────────────────────────────────────
+    if (dto.isWearableConnected !== undefined) {
+      updates['isWearableConnected'] = dto.isWearableConnected;
+    }
+
+    // ── Recalculate sugar limit if biometric / engine data changed ────────────
+    let sugarLimit: number | undefined;
+    const biometricChanged =
+      dto.name !== undefined || dto.gender !== undefined ||
+      dto.age  !== undefined || dto.height !== undefined ||
+      dto.weight !== undefined || dto.archetypeId !== undefined ||
+      dto.goalMode !== undefined || dto.customSugarLimit !== undefined;
+
+    if (biometricChanged) {
+      // Build a merged CalibrationDTO using existing + patched values
+      const merged: CalibrationDTO = {
+        name:              dto.name    ?? existingProfile.name    ?? '',
+        gender:            dto.gender  ?? existingProfile.gender  ?? 'male',
+        age:               dto.age     ?? existingProfile.age     ?? 30,
+        height:            dto.height  ?? existingProfile.height  ?? 170,
+        weight:            dto.weight  ?? existingProfile.weight  ?? 70,
+        archetypeId:       dto.archetypeId ?? existingProfile.archetypeId ?? 'desk',
+        goalMode:          dto.goalMode    ?? existingProfile.goalMode    ?? 'maintain',
+        customSugarLimit:  dto.customSugarLimit ?? existingProfile.customSugarLimit ?? undefined,
+        medicalConditions: existingProfile.medicalConditions ?? [],
+      };
+      sugarLimit = computeSugarLimit(merged);
+      profilePatch['sugarLimit'] = sugarLimit;
+    }
+
+    // ── Merge profilePatch into existing profile ───────────────────────────────
+    if (Object.keys(profilePatch).length > 0) {
+      // Use dot-notation keys so Firestore does a partial merge
+      for (const [key, value] of Object.entries(profilePatch)) {
+        updates[`profile.${key}`] = value;
+      }
+    }
+
+    await userRef.update(updates);
+    return sugarLimit !== undefined ? { sugarLimit } : {};
   },
 };

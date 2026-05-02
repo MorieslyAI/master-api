@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { userService, type CalibrationDTO, type CheckInXpState } from '../services/user.service.js';
+import { userService, type CalibrationDTO, type CheckInXpState, type UpdateSettingsDTO } from '../services/user.service.js';
 import { authenticate } from '../middleware/authenticate.js';
 
 // ─── Route Error Handler ──────────────────────────────────────────────────────
@@ -116,6 +116,52 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
           hasXp ? (body as CheckInXpState) : undefined,
         );
         return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    }
+  );
+
+  // ── PUT /user/settings ───────────────────────────────────────────────────────────
+  // Partial-update user profile & mission settings from SettingsScreen.
+  // All body fields are optional — only provided fields are updated in Firestore.
+  app.put<{ Body: UpdateSettingsDTO }>(
+    '/user/settings',
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            // Identity
+            name:                { type: 'string', minLength: 1, maxLength: 80 },
+            gender:              { type: 'string', enum: ['male', 'female'] },
+            age:                 { type: 'number', minimum: 1,  maximum: 120 },
+            height:              { type: 'number', minimum: 50, maximum: 300 },
+            weight:              { type: 'number', minimum: 1,  maximum: 500 },
+            // Engine
+            archetypeId:         { type: 'string', enum: ['desk', 'field', 'heavy', 'custom'] },
+            goalMode:            { type: 'string', enum: ['cut', 'maintain', 'bulk', 'custom'] },
+            customSugarLimit:    { type: 'number', minimum: 1,  maximum: 500 },
+            // Mission
+            eventName:           { type: 'string', maxLength: 120 },
+            targetWeight:        { type: 'number', minimum: 1,  maximum: 500 },
+            targetDate:          { type: 'string' },
+            // Account
+            isWearableConnected: { type: 'boolean' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await userService.updateSettings(request.user.uid, request.body);
+        return reply.send({
+          message: 'Settings updated.',
+          ...(result.sugarLimit !== undefined && { sugarLimit: result.sugarLimit }),
+        });
       } catch (err) {
         return handleError(err, reply);
       }
