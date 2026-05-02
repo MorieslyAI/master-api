@@ -1,0 +1,73 @@
+steps:
+  # 1. Build Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/master-api:${SHORT_SHA}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/master-api:latest'
+      - '.'
+    id: 'build-master-api'
+  
+  # 2. Push Image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/master-api'
+    id: 'push-master-api'
+  
+  # 3. Deploy Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'master-api'
+      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/master-api:${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--memory=${_MEMORY}'
+      - '--cpu=${_CPU}'
+      - '--min-instances=${_MIN_INSTANCES}'
+      - '--max-instances=${_MAX_INSTANCES}'
+      - '--port=${_PORT}'
+      - '--timeout=300'
+      - '--cpu-boost'
+      - '--allow-unauthenticated'
+      # Set Env Vars Runtime (menggunakan pemisah ^|^ agar aman jika ada nilai seperti PRIVATE_KEY yang mengandung koma)
+      - '--set-env-vars=^|^NODE_ENV=${_NODE_ENV}|^PORT=${_PORT}|^HOST=${_HOST}|^SOCKET_TOKEN_EXPIRES_IN=${_SOCKET_TOKEN_EXPIRES_IN}|^REFRESH_TOKEN_TTL_DAYS=${_REFRESH_TOKEN_TTL_DAYS}|^JWT_SOCKET_SECRET=${_JWT_SOCKET_SECRET}|^JWT_SECRET=${_JWT_SECRET}|^JWT_EXPIRES_IN=${_JWT_EXPIRES_IN}|^GEMINI_API_KEY=${_GEMINI_API_KEY}|^FIREBASE_PROJECT_ID=${_FIREBASE_PROJECT_ID}|^FIREBASE_PRIVATE_KEY=${_FIREBASE_PRIVATE_KEY}|^FIREBASE_CLIENT_EMAIL=${_FIREBASE_CLIENT_EMAIL}|^FIREBASE_API_KEY=${_FIREBASE_API_KEY}|^CORS_ORIGIN=${_CORS_ORIGIN}'
+    id: 'deploy-master-api'
+
+# Default Substitutions
+substitutions:
+  _REGION: 'us-central1'
+  _ARTIFACT_REGISTRY_REPO: 'master-api'
+  _MEMORY: '1Gi'
+  _CPU: '1'
+  _MIN_INSTANCES: '0'
+  _MAX_INSTANCES: '3'
+  # Variable Placeholder (Wajib diisi di Cloud Build Trigger)
+  _NODE_ENV: 'production'
+  _PORT: '4000'
+  _HOST: '0.0.0.0'
+  _SOCKET_TOKEN_EXPIRES_IN: ''
+  _REFRESH_TOKEN_TTL_DAYS: ''
+  _JWT_SOCKET_SECRET: ''
+  _JWT_SECRET: ''
+  _JWT_EXPIRES_IN: ''
+  _GEMINI_API_KEY: ''
+  _FIREBASE_PROJECT_ID: ''
+  _FIREBASE_PRIVATE_KEY: ''
+  _FIREBASE_CLIENT_EMAIL: ''
+  _FIREBASE_API_KEY: ''
+  _CORS_ORIGIN: ''
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_MEDIUM'
+
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/master-api:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/master-api:latest'
