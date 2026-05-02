@@ -8,6 +8,22 @@ function get(key: string, defaultVal?: string): string {
   return val;
 }
 
+function formatPrivateKey(key: string): string {
+  if (!key) return key;
+  let pk = key.replace(/^["']|["']$/g, "").replace(/\\n/g, "\n");
+  // Jika newlines hilang (Cloud Build sering menghapus newlines dari multiline variable)
+  if (!pk.includes("\n") || pk.split("\n").length <= 2) {
+    const begin = "-----BEGIN PRIVATE KEY-----";
+    const end = "-----END PRIVATE KEY-----";
+    if (pk.startsWith(begin) && pk.endsWith(end)) {
+      const base64 = pk.substring(begin.length, pk.length - end.length).replace(/\s+/g, "");
+      const chunks = base64.match(/.{1,64}/g) || [];
+      pk = `${begin}\n${chunks.join("\n")}\n${end}\n`;
+    }
+  }
+  return pk;
+}
+
 export const env = {
   NODE_ENV: get("NODE_ENV", "development") as
     | "development"
@@ -26,9 +42,7 @@ export const env = {
   // Firebase Admin SDK
   FIREBASE_PROJECT_ID: get("FIREBASE_PROJECT_ID"),
   FIREBASE_CLIENT_EMAIL: get("FIREBASE_CLIENT_EMAIL"),
-  FIREBASE_PRIVATE_KEY: get("FIREBASE_PRIVATE_KEY")
-    .replace(/^["']|["']$/g, "")
-    .replace(/\\n/g, "\n"),
+  FIREBASE_PRIVATE_KEY: formatPrivateKey(get("FIREBASE_PRIVATE_KEY")),
 
   // Firebase Auth REST API key (dari Firebase Console → Project Settings → Web API Key)
   FIREBASE_API_KEY: get("FIREBASE_API_KEY"),
