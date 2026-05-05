@@ -19,6 +19,7 @@ steps:
     id: 'push-master-api'
 
   # 3. Deploy Cloud Run
+  # saya akan lawan
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
