@@ -3,14 +3,16 @@ services:
   # ── Master API ──────────────────────────────────────────────────────────────
   master-api:
     build: .
-    ports:
-      - "4000:4000"
+    # Hapus expose port ke host agar akses hanya lewat Nginx
+    # ports:
+    #   - "4000:4000"
+    expose:
+      - "4000"
     environment:
       NODE_ENV: development
       PORT: "4000"
       HOST: "0.0.0.0"
       REDIS_URL: "redis://redis:6379"
-      # Isi variabel berikut via file .env atau environment CI/CD
       JWT_SECRET:             ${JWT_SECRET}
       JWT_SOCKET_SECRET:      ${JWT_SOCKET_SECRET}
       FIREBASE_PROJECT_ID:    ${FIREBASE_PROJECT_ID}
@@ -21,9 +23,20 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    # Jalankan 3 replicas di production (uncomment jika pakai Docker Swarm)
+    # Jalankan 3 replicas untuk load balancing (opsional)
     # deploy:
     #   replicas: 3
+
+  # ── Nginx (Reverse Proxy) ───────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"    # Expose port 80 ke host (bisa diakses di http://localhost)
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - master-api
+    restart: unless-stopped
 
   # ── Redis ───────────────────────────────────────────────────────────────────
   redis:
