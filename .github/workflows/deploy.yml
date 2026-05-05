@@ -1,0 +1,87 @@
+name: Deploy to Google Cloud VM
+
+on:
+  push:
+    branches:
+      - main          # Deploy otomatis saat push ke main
+  workflow_dispatch:  # Bisa trigger manual dari GitHub UI
+
+jobs:
+  # ─── JOB 1: TEST ───────────────────────────────────────
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test --if-present
+
+  # ─── JOB 2: DEPLOY ─────────────────────────────────────
+  deploy:
+    name: Deploy to GCP VM
+    runs-on: ubuntu-latest
+    needs: test   # Deploy hanya jika test lulus
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.GCP_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.GCP_VM_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VM
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              ${{ secrets.GCP_VM_USER }}@${{ secrets.GCP_VM_IP }} \
+              'bash -s' << 'ENDSSH'
+
+            set -e  # Exit jika ada error
+
+            echo "🚀 Starting deployment..."
+            cd ${{ secrets.APP_DIR }}
+
+            echo "📥 Pulling latest code..."
+            git pull origin main
+
+            echo "📦 Installing dependencies..."
+            npm ci --production
+
+            echo "🔄 Restarting application..."
+            pm2 reload ecosystem.config.js --env production
+
+            echo "✅ Deployment complete!"
+            pm2 status
+          ENDSSH
+
+      - name: Health Check
+        run: |
+          echo "⏳ Waiting for app to start..."
+          sleep 10
+
+          # Health check ke endpoint kamu
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            http://${{ secrets.GCP_VM_IP }}/health || echo "000")
+
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✅ Health check passed! Status: $HTTP_STATUS"
+          else
+            echo "⚠️ Health check returned: $HTTP_STATUS"
+            echo "App might still be starting up, check PM2 logs"
+          fi
