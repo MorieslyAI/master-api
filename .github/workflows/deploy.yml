@@ -64,19 +64,51 @@ jobs:
               ${{ secrets.GCP_VM_USER }}@${{ secrets.GCP_VM_IP }} \
               'bash -s' << 'ENDSSH'
 
-            set -e  # Exit jika ada error
+            set -euo pipefail  # Exit jika ada error
 
             echo "🚀 Starting deployment..."
             cd ${{ secrets.APP_DIR }}
+            PREV_COMMIT="$(git rev-parse HEAD)"
+            echo "🧷 Previous commit: $PREV_COMMIT"
 
             echo "📥 Pulling latest code..."
             git pull origin main
 
             echo "📦 Installing dependencies..."
-            npm ci --production
 
-            echo "🔄 Restarting application..."
-            pm2 reload ecosystem.config.js --env production
+            # Gunakan ecosystem file yang tersedia
+            if [ -f ecosystem.config.cjs ]; then
+              PM2_CONFIG="ecosystem.config.cjs"
+            elif [ -f ecosystem.config.js ]; then
+              PM2_CONFIG="ecosystem.config.js"
+            else
+              echo "❌ PM2 ecosystem config not found"
+              exit 1
+            fi
+
+            rollback() {
+              echo "↩️ Rolling back to previous commit: $PREV_COMMIT"
+              git reset --hard "$PREV_COMMIT"
+              npm ci
+              npm run build
+              pm2 reload "$PM2_CONFIG" --env production || pm2 start "$PM2_CONFIG" --env production
+            }
+
+            if ! {
+              echo "🏗️ Building app..."
+              npm ci
+              npm run build
+
+              echo "🔄 Restarting application..."
+              pm2 reload "$PM2_CONFIG" --env production || pm2 start "$PM2_CONFIG" --env production
+
+              echo "🩺 Local health check..."
+              curl -fsS http://127.0.0.1:3000/health >/dev/null
+            }; then
+              echo "❌ Deploy validation failed."
+              rollback
+              exit 1
+            fi
 
             echo "✅ Deployment complete!"
             pm2 status
@@ -94,6 +126,6 @@ jobs:
           if [ "$HTTP_STATUS" = "200" ]; then
             echo "✅ Health check passed! Status: $HTTP_STATUS"
           else
-            echo "⚠️ Health check returned: $HTTP_STATUS"
-            echo "App might still be starting up, check PM2 logs"
+            echo "❌ Health check failed. Status: $HTTP_STATUS"
+            exit 1
           fi
