@@ -39,10 +39,31 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(helmet, { contentSecurityPolicy: false });
 
   // ── CORS ───────────────────────────────────────────────────────────────────
+  // Di mobile (Capacitor), origin biasanya salah satu dari:
+  // - Android: https://localhost (karena androidScheme: "https")
+  // - iOS:     capacitor://localhost
+  // Jadi kita dukung daftar origin via env.CORS_ORIGIN (comma-separated).
+  const corsAllowedOrigins = new Set(
+    env.CORS_ORIGIN.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+
+  // Default tambahan yang aman untuk development mobile.
+  corsAllowedOrigins.add("https://localhost");
+  corsAllowedOrigins.add("http://localhost");
+  corsAllowedOrigins.add("capacitor://localhost");
+
   await app.register(cors, {
-    origin: env.CORS_ORIGIN,
+    origin: (origin, cb) => {
+      // Jika tidak ada Origin header (mis. curl / server-to-server), allow.
+      if (!origin) return cb(null, true);
+      if (corsAllowedOrigins.has(origin)) return cb(null, true);
+      return cb(new Error(`CORS blocked for origin: ${origin}`), false);
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   });
 
   // ── Cookie ─────────────────────────────────────────────────────────────────

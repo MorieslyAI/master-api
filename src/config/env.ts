@@ -66,6 +66,9 @@ export const env = {
   ),
 
   // CORS
+  // Bisa single origin atau comma-separated list.
+  // Contoh:
+  //   CORS_ORIGIN=http://localhost:3000,https://localhost,capacitor://localhost
   CORS_ORIGIN: get("CORS_ORIGIN", "http://localhost:3000"),
 } as const;
 
