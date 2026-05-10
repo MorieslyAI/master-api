@@ -17,7 +17,7 @@ steps:
       - '--all-tags'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REGISTRY_REPO}/master-api'
     id: 'push-master-api'
-
+  #tes
   # 3. Deploy Cloud Run
   # saya akan lawan
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
