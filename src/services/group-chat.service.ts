@@ -91,15 +91,42 @@ export const groupChatService = {
 
   async listMyGroupChats(userId: string) {
     const db = getDb();
-
+  
     const snap = await db
       .collection(COL_GROUP_CHATS)
       .where("memberIds", "array-contains", userId)
       .orderBy("updatedAt", "desc")
       .limit(50)
       .get();
-
-    return snap.docs.map((doc) => doc.data());
+  
+    const groups = await Promise.all(
+      snap.docs.map(async (doc) => {
+        const group = doc.data();
+  
+        const memberDoc = await doc.ref
+          .collection(SUB_MEMBERS)
+          .doc(userId)
+          .get();
+  
+        const member = memberDoc.data() ?? {};
+  
+        return {
+          ...group,
+          id: doc.id,
+          currentMember: memberDoc.exists
+            ? {
+                status: member["status"] ?? "invited",
+                role: member["role"] ?? "member",
+                invitedAt: member["invitedAt"] ?? null,
+                joinedAt: member["joinedAt"] ?? null,
+                lastReadAt: member["lastReadAt"] ?? null,
+              }
+            : null,
+        };
+      }),
+    );
+  
+    return groups;
   },
 
   async assertJoinedMember(groupId: string, userId: string) {
@@ -125,23 +152,36 @@ export const groupChatService = {
   async acceptInvite(groupId: string, userId: string) {
     const db = getDb();
     const now = new Date().toISOString();
-
-    const memberRef = db
-      .collection(COL_GROUP_CHATS)
-      .doc(groupId)
+  
+    const groupRef = db.collection(COL_GROUP_CHATS).doc(groupId);
+  
+    const memberRef = groupRef
       .collection(SUB_MEMBERS)
       .doc(userId);
-
+  
     const snap = await memberRef.get();
-    if (!snap.exists) throw httpError("Invite not found.", 404);
-
+  
+    if (!snap.exists) {
+      throw httpError("Invite not found.", 404);
+    }
+  
+    const member = snap.data() ?? {};
+  
+    if (member["status"] === "joined") {
+      return { success: true, alreadyJoined: true };
+    }
+  
+    if (member["status"] !== "invited") {
+      throw httpError("You cannot accept this invite.", 403);
+    }
+  
     await memberRef.update({
       status: "joined",
       joinedAt: now,
       lastReadAt: now,
     });
-
-    return { success: true };
+  
+    return { success: true, alreadyJoined: false };
   },
 
   async getMessages(groupId: string, userId: string, limit = 50) {
