@@ -16,6 +16,7 @@ import { dietRoutes } from "./routes/diet.js";
 import { trainingRoutes } from "./routes/training.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { trackRoutes } from "./routes/track.js";
+import { groupChatRoutes } from "./routes/group-chat.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -116,6 +117,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(trainingRoutes);
   await app.register(notificationRoutes);
   await app.register(trackRoutes);
+  await app.register(groupChatRoutes);
 
   return app;
 }
