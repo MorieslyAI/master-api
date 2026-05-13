@@ -207,10 +207,55 @@ export const authService = {
   // Google Sign-In: FE performs Google OAuth via Firebase Client SDK,
   // then sends idToken + refreshToken to BE for verification and profile creation.
   async googleSignIn(dto: GoogleSignInDTO): Promise<AuthResult> {
-    // 1. Verify ID Token from Firebase (ensure token is valid and belongs to this project)
-    const decoded = await getAuth().verifyIdToken(dto.idToken).catch(() => {
-      throw httpError('Invalid Google token.', 401);
-    });
+    // 1. Verify ID Token — coba Firebase ID token dulu, fallback ke Google OAuth token
+    let decoded: Awaited<ReturnType<typeof getAuth>['verifyIdToken']>;
+    try {
+      decoded = await getAuth().verifyIdToken(dto.idToken);
+    } catch {
+      // Mungkin ini Google OAuth ID token (bukan Firebase ID token) — decode manual
+      // Google OAuth ID token: iss = accounts.google.com, sub = google uid
+      try {
+        const parts = dto.idToken.split('.');
+        if (parts.length !== 3) throw new Error('invalid jwt');
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
+
+        const issuer = payload.iss as string ?? '';
+        if (!issuer.includes('accounts.google.com')) {
+          throw httpError('Invalid Google token.', 401);
+        }
+
+        // Verifikasi ke Google tokeninfo endpoint
+        const infoRes  = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${dto.idToken}`);
+        const infoData = await infoRes.json() as Record<string, string>;
+        if (!infoRes.ok || !infoData.email) throw httpError('Invalid Google token.', 401);
+
+        // Dapatkan atau buat Firebase user berdasarkan email
+        const firebaseUser = await getAuth().getUserByEmail(infoData.email).catch(async () => {
+          return getAuth().createUser({
+            email:       infoData.email,
+            displayName: infoData.name ?? infoData.email.split('@')[0],
+            photoURL:    infoData.picture,
+            emailVerified: true,
+          });
+        });
+
+        // Buat custom token agar client bisa sign in ke Firebase Web SDK
+        const customToken = await getAuth().createCustomToken(firebaseUser.uid);
+
+        decoded = {
+          uid:     firebaseUser.uid,
+          email:   infoData.email,
+          name:    infoData.name,
+          picture: infoData.picture,
+        } as unknown as Awaited<ReturnType<typeof getAuth>['verifyIdToken']>;
+
+        // Override idToken dengan custom token agar bisa digunakan client
+        dto = { ...dto, idToken: customToken };
+      } catch (innerErr) {
+        if ((innerErr as Error & { statusCode?: number }).statusCode) throw innerErr;
+        throw httpError('Invalid Google token.', 401);
+      }
+    }
 
     const uid         = decoded.uid;
     const email       = decoded.email       ?? '';
