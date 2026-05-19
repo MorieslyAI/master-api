@@ -308,9 +308,17 @@ class DietService {
     // Only serve today's daily plan — plans from previous days are considered expired
     const daily = dailyRaw?.dateStr === today ? dailyRaw : null;
 
-    const weekly = weeklySnap.empty
-      ? null
-      : (this.docToStored(weeklySnap.docs[0]) as StoredWeeklyPlan);
+    // Only serve weekly plan if still within its 7-day active window
+    // After the window expires, return null so the frontend knows to show an empty state
+    let weekly: StoredWeeklyPlan | null = null;
+    if (!weeklySnap.empty) {
+      const weeklyRaw = this.docToStored(weeklySnap.docs[0]) as StoredWeeklyPlan;
+      const unlockAt = new Date(weeklyUnlockDate(weeklyRaw.createdAt));
+      if (unlockAt > new Date()) {
+        weekly = weeklyRaw; // Still in its active 7-day window
+      }
+      // If unlockAt <= now, the plan has expired — return null, user must regenerate
+    }
 
     // Daily lock: cukup cek dateStr == today
     const canGenerateDaily = daily?.dateStr !== today;
