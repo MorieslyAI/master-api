@@ -151,6 +151,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
             targetDate:          { type: 'string' },
             // Account
             isWearableConnected: { type: 'boolean' },
+            isManualSugarOverride: { type: 'boolean' },
           },
         },
       },
