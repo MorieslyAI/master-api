@@ -301,9 +301,12 @@ class DietService {
       col.where("type", "==", "weekly").orderBy("createdAt", "desc").limit(1).get(),
     ]);
 
-    const daily = dailySnap.empty
+    const dailyRaw = dailySnap.empty
       ? null
       : (this.docToStored(dailySnap.docs[0]) as StoredDailyPlan);
+
+    // Only serve today's daily plan — plans from previous days are considered expired
+    const daily = dailyRaw?.dateStr === today ? dailyRaw : null;
 
     const weekly = weeklySnap.empty
       ? null
