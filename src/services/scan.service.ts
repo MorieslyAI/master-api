@@ -191,32 +191,30 @@ Analyze the user's face in the image for signs of "Sugar Face" (Glycation) and S
 1. **MAP THE FACE & IDENTIFY ISSUES**: 
    - Detect 6-8 distinct zones with issues. Look for: Forehead lines, Puffy eyes, Dark circles, Sagging cheeks, Jawline acne, Dullness, Redness.
    - **BE SPECIFIC**: Do NOT give generic results. If the user has clear skin, report "Optimal". If they have acne, report "Inflammation". Match the visual evidence.
+   - Use ONLY these zone names (match exactly): "Forehead", "Left Eye", "Right Eye", "Left Cheek", "Right Cheek", "Chin", "Nose", "Upper Lip"
    
-2. **ESTIMATE SPATIAL COORDINATES (CRITICAL)**:
-   - For EACH detected issue, you MUST estimate its center position on the image.
-   - Use a percentage scale (0-100) where x=0 is left, y=0 is top.
-   - Example: Forehead might be {x: 50, y: 25}. Left cheek might be {x: 35, y: 55}.
+2. **DO NOT estimate coordinates** — coordinates will be computed precisely from face landmark data and injected by the server.
 
 3. **GENERATE A UNIQUE RESCUE PROTOCOL**:
    - The "recommendations" object MUST be tailored to the detected issues.
    - Skincare: Specific ingredients (e.g. "Salicylic Acid" for acne, "Peptides" for wrinkles, "Caffeine" for puffiness).
    - Diet: Specific foods to eat/avoid based on the scan.
 
-Return strictly JSON:
+Return strictly JSON (NO coordinates field needed in faceZones):
 {
   "biologicalAge": number,
   "glycationLevel": "Low" | "Moderate" | "Critical",
   "detectedIssues": ["string", "string"],
   "faceZones": [
      { 
-       "area": "string", 
+       "area": "Forehead" | "Left Eye" | "Right Eye" | "Left Cheek" | "Right Cheek" | "Chin" | "Nose" | "Upper Lip",
        "condition": "string", 
        "severity": "Low"|"Medium"|"High", 
        "treatment": "string",
-       "coordinates": { "x": number, "y": number } 
+       "explanation": "Specific medical observation for this exact zone."
      }
   ],
-  "projection": "A scary prediction of what happens in 5 years if sugar intake isn't reduced.",
+  "projection": "A scary prediction of what happens in 5 years if sugar intake is not reduced.",
   "recommendations": {
       "skincare": "Specific skincare routine advice.",
       "diet": "Specific dietary changes.",
@@ -227,6 +225,60 @@ Return strictly JSON:
   }
 }
 `;
+
+// ==========================================
+// L A N D M A R K  H E L P E R S
+// ==========================================
+
+/** Indices MediaPipe per zona wajah (canonical 478-point model) */
+const ZONE_LANDMARK_INDICES: Record<string, number[]> = {
+  "Forehead":    [10, 338, 297, 332, 284, 251, 389, 109, 67, 103, 54, 21],
+  "Left Eye":    [159, 145, 133, 173, 157, 158, 144, 153, 154, 155],
+  "Right Eye":   [386, 374, 362, 398, 384, 385, 373, 380, 381, 382],
+  "Left Cheek":  [116, 123, 147, 187, 207, 206, 203, 36, 101, 119],
+  "Right Cheek": [345, 352, 376, 411, 427, 426, 423, 266, 330, 348],
+  "Chin":        [152, 175, 148, 176, 149, 150, 136, 172, 58, 132],
+  "Nose":        [1, 4, 5, 195, 197, 6, 168, 8],
+  "Upper Lip":   [0, 267, 269, 270, 409, 291, 375, 321, 405, 314],
+};
+
+/**
+ * Hitung centroid koordinat (0–100%) dari sekumpulan landmark indices.
+ */
+function computeZoneCentroid(
+  landmarks: { x: number; y: number; z: number }[],
+  indices: number[],
+): { x: number; y: number } {
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+  for (const idx of indices) {
+    const pt = landmarks[idx];
+    if (pt) {
+      sumX += pt.x;
+      sumY += pt.y;
+      count++;
+    }
+  }
+  if (count === 0) return { x: 50, y: 50 };
+  return {
+    x: parseFloat(((sumX / count) * 100).toFixed(1)),
+    y: parseFloat(((sumY / count) * 100).toFixed(1)),
+  };
+}
+
+/**
+ * Build lookup map: zoneName → koordinat presisi dari landmark MediaPipe.
+ */
+function buildZoneCoordinateMap(
+  landmarks: { x: number; y: number; z: number }[],
+): Record<string, { x: number; y: number }> {
+  const map: Record<string, { x: number; y: number }> = {};
+  for (const [zone, indices] of Object.entries(ZONE_LANDMARK_INDICES)) {
+    map[zone] = computeZoneCentroid(landmarks, indices);
+  }
+  return map;
+}
 
 // ==========================================
 // S E R V I C E  M E T H O D S
@@ -273,9 +325,19 @@ export const executeStandardScan = async (
 };
 
 /**
- * Execute skin/bio scan (glycation & inflammation analysis on a face image)
+ * Execute skin/bio scan (glycation & inflammation analysis on a face image).
+ *
+ * Jika `landmarks` disediakan (478 points dari MediaPipe FE):
+ *   - Koordinat zona dihitung secara presisi dari landmark nyata
+ *   - Gemini fokus analisis kondisi kulit, tidak perlu tebak koordinat
+ *
+ * Jika `landmarks` tidak ada (fallback — upload gambar langsung):
+ *   - Koordinat zona diisi dari hardcoded fallback berdasarkan nama zona
  */
-export const executeSkinScan = async (base64Image: string) => {
+export const executeSkinScan = async (
+  base64Image: string,
+  landmarks?: { x: number; y: number; z: number }[],
+) => {
   const response = await ai.models.generateContent({
     model: MANUAL_SCAN_MODEL,
     contents: [
@@ -290,16 +352,55 @@ export const executeSkinScan = async (base64Image: string) => {
     config: { responseMimeType: "application/json" },
   });
 
-  if (response.text) {
-    const rawText = response.text
-      .replace(/\`\`\`json/g, "")
-      .replace(/\`\`\`/g, "")
-      .trim();
-    return JSON.parse(rawText);
+  if (!response.text) {
+    throw new Error("Failed to extract text from AI response");
   }
 
-  throw new Error("Failed to extract text from AI response");
+  const rawText = response.text
+    .replace(/\`\`\`json/g, "")
+    .replace(/\`\`\`/g, "")
+    .trim();
+
+  const result = JSON.parse(rawText);
+
+  // Inject koordinat presisi ke setiap faceZone
+  if (result.faceZones && Array.isArray(result.faceZones)) {
+    if (landmarks && landmarks.length >= 400) {
+      // Mode presisi: pakai koordinat dari MediaPipe FE
+      const coordMap = buildZoneCoordinateMap(landmarks);
+      result.faceZones = result.faceZones.map((zone: any) => ({
+        ...zone,
+        coordinates: coordMap[zone.area] ?? getFallbackCoordinate(zone.area),
+      }));
+    } else {
+      // Mode fallback: koordinat dari nama zona
+      result.faceZones = result.faceZones.map((zone: any) => ({
+        ...zone,
+        coordinates: zone.coordinates ?? getFallbackCoordinate(zone.area),
+      }));
+    }
+  }
+
+  return result;
 };
+
+/**
+ * Koordinat fallback berdasarkan nama zona (persen 0-100, proporsi wajah standar).
+ * Digunakan saat landmark dari MediaPipe tidak tersedia.
+ */
+function getFallbackCoordinate(area: string): { x: number; y: number } {
+  const a = (area ?? "").toLowerCase();
+  if (a.includes("forehead"))                              return { x: 50, y: 22 };
+  if (a.includes("left eye"))                              return { x: 35, y: 38 };
+  if (a.includes("right eye"))                             return { x: 65, y: 38 };
+  if (a.includes("left cheek"))                            return { x: 28, y: 57 };
+  if (a.includes("right cheek"))                           return { x: 72, y: 57 };
+  if (a.includes("nose"))                                  return { x: 50, y: 50 };
+  if (a.includes("upper lip") || a.includes("mouth"))      return { x: 50, y: 65 };
+  if (a.includes("chin") || a.includes("jaw"))             return { x: 50, y: 77 };
+  if (a.includes("neck"))                                  return { x: 50, y: 90 };
+  return { x: 50, y: 50 };
+}
 
 /**
  * Execute re-analyze scan with manual name/type correction.

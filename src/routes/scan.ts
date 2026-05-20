@@ -28,6 +28,8 @@ interface ReanalyzeScanBody {
 interface SkinScanBody {
   scanMode: "skin";
   base64Image: string;
+  /** Opsional: 478 landmark points dari MediaPipe Face Landmarker di FE (normalized 0.0-1.0) */
+  landmarks?: { x: number; y: number; z: number }[];
 }
 
 type ScanBody =
@@ -59,13 +61,14 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
         }
         aiResult = await executeVersusScan(base64ImageA, base64ImageB);
       } else if (payload.scanMode === "skin") {
-        const { base64Image } = payload as SkinScanBody;
+        const { base64Image, landmarks } = payload as SkinScanBody;
         if (!base64Image) {
           return reply
             .status(400)
             .send({ error: "base64Image is required for skin mode" });
         }
-        aiResult = await executeSkinScan(base64Image);
+        // Kirim landmarks ke service jika ada (dari MediaPipe FE)
+        aiResult = await executeSkinScan(base64Image, landmarks);
       } else if (payload.scanMode === "reanalyze") {
         const { manualName, manualType, base64Image } =
           payload as ReanalyzeScanBody;
