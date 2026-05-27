@@ -8,6 +8,7 @@ import { videoCallService } from "../services/video-call.service.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { verifySocketToken } from "../lib/jwt.js";
 import { env } from "../config/env.js";
+import { checkAndIncrementUsage } from "../services/usage.service.js";
 
 // ─── Route Error Handler ──────────────────────────────────────────────────────
 
@@ -594,7 +595,13 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       const { id: sessionId } = request.params;
       const { message, history, userProfile, imageBase64 } = request.body;
       const userId = request.user.uid;
-
+      // Check chat limits
+      const usage = await checkAndIncrementUsage(userId, "chat");
+      if (!usage.allowed) {
+        return reply.status(429).send({ 
+          error: `Limit chat harian Anda telah mencapai batas maksimal (${usage.limit} pesan/hari).` 
+        });
+      }
       // ── Create a PassThrough stream so Fastify (+ CORS plugin) processes
       //    headers normally before we start writing tokens.
       const sseStream = new PassThrough();

@@ -6,6 +6,7 @@ import {
   executeSkinScan,
 } from "../services/scan.service.js";
 import { authenticate } from "../middleware/authenticate.js";
+import { checkAndIncrementUsage } from "../services/usage.service.js";
 
 interface StandardScanBody {
   base64Image: string;
@@ -45,9 +46,18 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   app.post<{ Body: ScanBody }>("/", async (req, reply) => {
     try {
       const payload = req.body;
+      const userId = req.user.uid;
 
       if (!payload.scanMode) {
         return reply.status(400).send({ error: "scanMode is required" });
+      }
+
+      // Check scan limits
+      const usage = await checkAndIncrementUsage(userId, "scan");
+      if (!usage.allowed) {
+        return reply.status(429).send({ 
+          error: `Limit scan harian Anda telah mencapai batas maksimal (${usage.limit} scan/hari).` 
+        });
       }
 
       let aiResult;

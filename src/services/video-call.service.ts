@@ -1,5 +1,6 @@
 import { getDb } from "../lib/firebase.js";
 import { env } from "../config/env.js";
+import { PLAN_LIMITS } from "../config/plan.constants.js";
 
 const COL_USERS = "users";
 const COL_SYSTEM = "system";
@@ -190,40 +191,40 @@ async function resolvePolicy(userId: string): Promise<VideoCallPolicy> {
   const subscriptionPlan = String(
     userData["subscriptionPlan"] ?? userData["plan"] ?? "free",
   );
-  const isPro =
-    role === "admin" ||
-    subscriptionPlan === "pro" ||
-    subscriptionPlan === "premium";
+  
+  let currentPlan = subscriptionPlan;
+  if (role === "admin" || role === "whitelist") {
+    currentPlan = "whitelist";
+  }
+  
+  const limits = PLAN_LIMITS[currentPlan] || PLAN_LIMITS.free;
 
   const userPolicyRaw = (userData["videoPolicy"] ?? {}) as Record<
     string,
     unknown
   >;
-  const multiplier = isPro ? 2 : 1;
 
   const basePolicy: VideoCallPolicy = {
     maxDurationSeconds: clampInt(
-      env.VIDEO_CALL_MAX_DURATION_SECONDS * multiplier,
-      env.VIDEO_CALL_MAX_DURATION_SECONDS,
+      limits.videoCallMinutes * 60,
+      60,
       60,
       7200,
     ),
     dailyMaxCalls: clampInt(
-      env.VIDEO_CALL_DAILY_MAX_CALLS * multiplier,
-      env.VIDEO_CALL_DAILY_MAX_CALLS,
+      limits.videoCallDailyMax,
+      1,
       1,
       200,
     ),
     dailyMaxSeconds: clampInt(
-      env.VIDEO_CALL_DAILY_MAX_SECONDS * multiplier,
-      env.VIDEO_CALL_DAILY_MAX_SECONDS,
+      limits.videoCallMinutes * 60 * limits.videoCallDailyMax,
+      60,
       60,
       86400,
     ),
     maxConcurrentSessions: clampInt(
-      isPro
-        ? Math.max(2, env.VIDEO_CALL_MAX_CONCURRENT_PER_USER)
-        : env.VIDEO_CALL_MAX_CONCURRENT_PER_USER,
+      currentPlan === "free" ? 1 : Math.max(2, env.VIDEO_CALL_MAX_CONCURRENT_PER_USER),
       env.VIDEO_CALL_MAX_CONCURRENT_PER_USER,
       1,
       10,
