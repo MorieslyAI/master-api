@@ -208,7 +208,7 @@ export const authService = {
   // then sends idToken + refreshToken to BE for verification and profile creation.
   async googleSignIn(dto: GoogleSignInDTO): Promise<AuthResult> {
     // 1. Verify ID Token — coba Firebase ID token dulu, fallback ke Google OAuth token
-    let decoded: Awaited<ReturnType<typeof getAuth>['verifyIdToken']>;
+    let decoded: any;
     try {
       decoded = await getAuth().verifyIdToken(dto.idToken);
     } catch {
@@ -324,13 +324,22 @@ export const authService = {
     if (!doc.exists) throw httpError('User not found.', 404);
 
     const data = doc.data() as UserDoc;
+    let createdAtISO = undefined;
+    if ((data as any).createdAt) {
+      if (typeof (data as any).createdAt.toDate === 'function') {
+        createdAtISO = (data as any).createdAt.toDate().toISOString();
+      } else if (typeof (data as any).createdAt === 'string') {
+        createdAtISO = (data as any).createdAt;
+      }
+    }
+
     return {
       userId:                doc.id,
       email:                 data.email,
       displayName:           data.displayName,
       role:                  data.role,
       isCalibrationComplete: data.isCalibrationComplete ?? false,
-      createdAt:             (data as any).createdAt?.toDate().toISOString(),
+      createdAt:             createdAtISO,
     };
   },
 };
