@@ -191,12 +191,12 @@ async function resolvePolicy(userId: string): Promise<VideoCallPolicy> {
   const subscriptionPlan = String(
     userData["subscriptionPlan"] ?? userData["plan"] ?? "free",
   );
-  
+
   let currentPlan = subscriptionPlan;
   if (role === "admin" || role === "whitelist") {
     currentPlan = "whitelist";
   }
-  
+
   const limits = PLAN_LIMITS[currentPlan] || PLAN_LIMITS.free;
 
   const userPolicyRaw = (userData["videoPolicy"] ?? {}) as Record<
@@ -205,18 +205,8 @@ async function resolvePolicy(userId: string): Promise<VideoCallPolicy> {
   >;
 
   const basePolicy: VideoCallPolicy = {
-    maxDurationSeconds: clampInt(
-      limits.videoCallMinutes * 60,
-      60,
-      60,
-      7200,
-    ),
-    dailyMaxCalls: clampInt(
-      limits.videoCallDailyMax,
-      1,
-      1,
-      200,
-    ),
+    maxDurationSeconds: clampInt(limits.videoCallMinutes * 60, 60, 60, 7200),
+    dailyMaxCalls: clampInt(limits.videoCallDailyMax, 1, 1, 200),
     dailyMaxSeconds: clampInt(
       limits.videoCallMinutes * 60 * limits.videoCallDailyMax,
       60,
@@ -224,7 +214,9 @@ async function resolvePolicy(userId: string): Promise<VideoCallPolicy> {
       86400,
     ),
     maxConcurrentSessions: clampInt(
-      currentPlan === "free" ? 1 : Math.max(2, env.VIDEO_CALL_MAX_CONCURRENT_PER_USER),
+      currentPlan === "free"
+        ? 1
+        : Math.max(2, env.VIDEO_CALL_MAX_CONCURRENT_PER_USER),
       env.VIDEO_CALL_MAX_CONCURRENT_PER_USER,
       1,
       10,

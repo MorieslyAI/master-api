@@ -18,10 +18,11 @@ export const PLAN_LIMITS: Record<string, PlanLimits> = {
     videoCallMinutes: 30, // 30 mins
     videoCallDailyMax: 10,
   },
-  whitelist: { // User mentions whitelist
+  whitelist: {
+    // User mentions whitelist
     scanCount: 99999,
     chatCount: 99999,
     videoCallMinutes: 120, // 2 hours
     videoCallDailyMax: 50,
-  }
+  },
 };

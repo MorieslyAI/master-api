@@ -121,7 +121,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
   // End session manually. Idempotent on already-ended sessions.
   app.post<{
     Params: { id: string };
-    Body?: { 
+    Body?: {
       reason?: string;
       transcript?: Array<{ role: string; text: string }>;
     };
@@ -169,7 +169,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
           summaryData = await chatService.saveVideoCallAsChatSession(
             request.user.uid,
             request.params.id,
-            request.body.transcript
+            request.body.transcript,
           );
         }
 
@@ -319,7 +319,9 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
         liveSessionPromise = geminiLive.live.connect({
           model: "gemini-2.5-flash-native-audio-latest",
           config: {
-            systemInstruction: { parts: [{ text: message.systemInstruction ?? "" }] },
+            systemInstruction: {
+              parts: [{ text: message.systemInstruction ?? "" }],
+            },
             responseModalities: [Modality.AUDIO],
             speechConfig: {
               voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } },
@@ -598,8 +600,8 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       // Check chat limits
       const usage = await checkAndIncrementUsage(userId, "chat");
       if (!usage.allowed) {
-        return reply.status(429).send({ 
-          error: `Limit chat harian Anda telah mencapai batas maksimal (${usage.limit} pesan/hari).` 
+        return reply.status(429).send({
+          error: `Limit chat harian Anda telah mencapai batas maksimal (${usage.limit} pesan/hari).`,
         });
       }
       // ── Create a PassThrough stream so Fastify (+ CORS plugin) processes

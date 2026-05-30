@@ -78,64 +78,84 @@ CRITICAL:
 `;
 
 const LABEL_SCAN_PROMPT = `
-  PERFORM A HIGH-PRECISION FORENSIC NUTRITION ANALYSIS.
-  
-  **OBJECTIVE:** Extract the EXACT sugar content and identify the product with 100% OCR ACCURACY.
-  
-  **PHASE 1: BRAND RECOGNITION & CROSS-REFERENCE**
-  1. Identify the Brand and Product Name (e.g., "Indomie Goreng", "Coca Cola", "Oreo").
-  2. **CRITICAL:** If the product is a known brand (like "Indomie"), use your INTERNAL KNOWLEDGE to validate the OCR result.
-     - Example: "Indomie Goreng" typically has ~8-9g of sugar (from the seasoning oil/kecap). If OCR sees "0g", it is likely reading the dry noodle block only. YOU MUST CORRECT THIS using general product knowledge.
-     - Example: "Coke" has ~39g. If label is folded, use known data.
-  
-  **PHASE 2: OCR & DATA EXTRACTION (ZERO ERROR TOLERANCE)**
-  1. Locate "NUTRITION FACTS" or "**INFORMASI NILAI GIZI**".
-  2. Find "**Total Sugars**" / "**Gula Total**" / "**Gula**".
-     - IGNORE "Carbohydrates" unless sugar is missing.
-     - CAREFUL: Check if the column is "Per Serving" (Per Sajian) or "Per 100g". **Prioritize "Per Serving"**.
-  3. Extract the **Serving Size** (Takaran Saji).
-  4. Identify **Sodium** / **Natrium** (mg) and **Trans Fat** (g).
-  5. Do not miss any numbers. If text is blurry, use context clues.
-  
-  **PHASE 3: DECEPTION DETECTION**
-  1. Scan the INGREDIENTS LIST (**Komposisi**).
-  2. Find HIDDEN SUGARS (e.g., High Fructose Corn Syrup, Maltodextrin, Dextrose, Fruktosa, Sirup Jagung, Sukrosa).
-  
-  RETURN STRICT JSON:
-  {
-    "identified_product": "Brand & Name",
-    "serving_size": "Extracted string",
-    "total_sugar_on_label": number (grams FROM OCR),
-    "hidden_sugar_grams": number (grams TOTAL estimated if label is deceptive/incomplete, or same as label if honest),
-    "sodium_mg": number,
-    "trans_fat_g": number,
-    "deceptive_ingredients": ["List of bad stuff found"],
-    "verdict": "Sarcastic/Brutal 1-2 sentence conclusion"
-  }
+PERFORM A HIGH-PRECISION FORENSIC NUTRITION ANALYSIS.
+
+**OBJECTIVE:** Extract the EXACT sugar content and identify the product with 100% OCR ACCURACY.
+
+**PHASE 1: BRAND RECOGNITION & CROSS-REFERENCE**
+1. Identify the Brand and Product Name (e.g., "Indomie Goreng", "Coca Cola", "Oreo").
+2. **CRITICAL:** If the product is a known brand (like "Indomie"), use your INTERNAL KNOWLEDGE to validate the OCR result.
+   - Example: "Indomie Goreng" typically has ~8-9g of sugar (from the seasoning oil/kecap). If OCR sees "0g", it is likely reading the dry noodle block only. YOU MUST CORRECT THIS using general product knowledge.
+   - Example: "Coke" has ~39g. If label is folded, use known data.
+
+**PHASE 2: OCR & DATA EXTRACTION (ZERO ERROR TOLERANCE)**
+1. Locate "NUTRITION FACTS" or "**INFORMASI NILAI GIZI**".
+2. Find "**Total Sugars**" / "**Gula Total**" / "**Gula**".
+   - IGNORE "Carbohydrates" unless sugar is missing.
+   - CAREFUL: Check if the column is "Per Serving" (Per Sajian) or "Per 100g". **Prioritize "Per Serving"**.
+3. Extract the **Serving Size** (Takaran Saji).
+4. Identify **Sodium** / **Natrium** (mg) and **Trans Fat** (g).
+5. Do not miss any numbers. If text is blurry, use context clues.
+
+**PHASE 3: DECEPTION DETECTION**
+1. Check Ingredients ("Komposisi"). Look for hidden sugars: Dextrose, Maltodextrin, High Fructose Corn Syrup, Cane Juice, Kecap Manis (Soy Sauce often has sugar).
+2. Detect Tricks: "0g Sugar" but "15g Added Sugars"? Or small serving sizes (e.g. 5 pieces) to hide load?
+
+RETURN STRICT JSON:
+{
+  "label_honesty_score": number (1-10),
+  "product_name": "string" (Detected Brand Name),
+  "hidden_additives": ["string"],
+  "deception_technique": "string" (e.g. "Serving Size Manipulation", "Sauce Separation"),
+  "technique_explanation": "string",
+  "ingredients_snippet": "string",
+  "verdict": "string",
+  "hidden_sugar_grams": number (The MOST ACCURATE single serving sugar amount. Use internal knowledge if OCR is ambiguous),
+  "serving_size": "string" (e.g. "85g", "1 Bottle", "1 Pack"),
+  "sodium_impact": "Low" | "Medium" | "High" | "Critical",
+  "sodium_explanation": "string",
+  "trans_fat": number (grams, MUST BE ESTIMATED IF UNKNOWN),
+  "salt": number (grams, MUST BE ESTIMATED IF UNKNOWN)
+}
 `;
 
 const QR_SCAN_PROMPT = `
-  ANALYZE THE IMAGE FOR A QR CODE, BARCODE, OR PRODUCT PACKAGING.
-  Identify the product precisely.
-  
-  PERFORM A "FULL DISCLOSURE" FORENSIC AUDIT.
-  Imagine you are a biological detective exposing the hidden industrial ingredients.
-  
-  RETURN STRICT JSON:
-  {
-    "product_name": "string (e.g. Instant Noodles, Soda Brand)",
-    "sugar_grams": number,
-    "calories": number,
-    "risk_level": "High" | "Moderate" | "Low",
-    "additives": [
-      { 
-        "name": "Chemical Name (e.g. Sodium Polyphosphate, Hydrogenated Oil)", 
-        "role": "Function (e.g. Texture Agent, Trans Fat)", 
-        "risk": "Short Medical Risk (e.g. KIDNEY STRESS, ARTERIAL CLOG, LIVER FAT)" 
-      }
-    ],
-    "truth_bomb": "A brutal 1-2 sentence reality check about this product."
-  }
+ANALYZE THE IMAGE FOR A QR CODE, BARCODE, OR PRODUCT PACKAGING.
+Identify the product precisely.
+
+PERFORM A "FULL DISCLOSURE" FORENSIC AUDIT.
+Imagine you are a biological detective exposing the hidden industrial ingredients.
+
+RETURN STRICT JSON:
+{
+  "product_name": "string (e.g. Instant Noodles, Soda Brand)",
+  "sugar_grams": number,
+  "calories": number,
+  "risk_level": "High" | "Moderate" | "Low",
+  "additives": [
+    { 
+      "name": "Chemical Name (e.g. Sodium Polyphosphate, Hydrogenated Oil)", 
+      "role": "Function (e.g. Texture Agent, Trans Fat)", 
+      "risk": "Short Medical Risk (e.g. KIDNEY STRESS, ARTERIAL CLOG, LIVER FAT)" 
+    },
+    { "name": "Chemical Name", "role": "Function", "risk": "Medical Risk" },
+    { "name": "Chemical Name", "role": "Function", "risk": "Medical Risk" }
+  ],
+  "side_effects": [
+    { 
+      "condition": "Medical Alert (e.g. Water Retention Alert, Digestive Stress)", 
+      "severity": "High" | "Moderate" | "Low", 
+      "description": "Specific biological mechanism (e.g. Excessive sodium (820mg) will cause facial puffiness...)", 
+      "color": "blue" 
+    },
+    { 
+      "condition": "Secondary Alert", 
+      "severity": "Moderate", 
+      "description": "Short explanation.", 
+      "color": "pink" 
+    }
+  ]
+}
 `;
 
 const RECEIPT_SCAN_PROMPT = `

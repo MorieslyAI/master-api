@@ -8,23 +8,25 @@ function getDayKey(date = new Date()): string {
 
 export async function checkAndIncrementUsage(
   userId: string,
-  type: "scan" | "chat"
+  type: "scan" | "chat",
 ): Promise<{ allowed: boolean; remaining: number; limit: number }> {
   const db = getDb();
   const dayKey = getDayKey();
-  
+
   // 1. Dapatkan role/plan user terlebih dahulu
   const userRef = db.collection("users").doc(userId);
   const userSnap = await userRef.get();
   const userData = userSnap.data() || {};
-  const subscriptionPlan = String(userData["subscriptionPlan"] || userData["plan"] || "free");
+  const subscriptionPlan = String(
+    userData["subscriptionPlan"] || userData["plan"] || "free",
+  );
   const role = String(userData["role"] || "user");
-  
+
   let currentPlan = subscriptionPlan;
   if (role === "admin" || role === "whitelist") {
     currentPlan = "whitelist";
   }
-  
+
   const limits = PLAN_LIMITS[currentPlan] || PLAN_LIMITS.free;
   const targetLimit = type === "scan" ? limits.scanCount : limits.chatCount;
 
@@ -45,11 +47,19 @@ export async function checkAndIncrementUsage(
     }
 
     // Eksekusi penambahan counter
-    transaction.set(usageRef, {
-      [`${type}Count`]: FieldValue.increment(1),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    transaction.set(
+      usageRef,
+      {
+        [`${type}Count`]: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
 
-    return { allowed: true, remaining: targetLimit - currentUsage - 1, limit: targetLimit };
+    return {
+      allowed: true,
+      remaining: targetLimit - currentUsage - 1,
+      limit: targetLimit,
+    };
   });
 }
