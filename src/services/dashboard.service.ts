@@ -604,13 +604,19 @@ export const dashboardService = {
   async getRangeMetrics(
     userId: string,
     range: TimeRange,
-  ): Promise<{ timeRange: TimeRange; metabolicTrend: number; energyTrend: number }> {
+  ): Promise<{ timeRange: TimeRange; metabolicScore: number; metabolicTrend: number; energyTrend: number }> {
     const db = getDb();
+    
+    // Fetch profile for accurate baseline targets
+    const doc = await db.collection(COL_USERS).doc(userId).get();
+    const data = doc.data() || {};
+    const p = data["profile"] as StoredProfile | undefined;
+    const macroTargets = p ? computeMacroTargets(p) : { calories: 2000, protein: 120, carbs: 250, fat: 65, fiber: 25 };
+
     const sinceMs = Date.now() - timeRangeToMs(range);
     const sinceIso = new Date(sinceMs).toISOString();
 
-    // Ambil log user sejak tanggal paling awal dalam rentang (filter di memori)
-    // Untuk range pendek (30S–1H) kita tetap pakai filter date=hari ini agar tidak scan seluruh koleksi
+    // Ambil log user sejak tanggal paling awal dalam rentang
     const sinceDate = new Date(sinceMs).toISOString().split("T")[0];
     const snapshot = await db
       .collection(COL_USERS)
@@ -623,34 +629,49 @@ export const dashboardService = {
     let totalSugar = 0;
     let totalProtein = 0;
     let count = 0;
+    const uniqueDays = new Set<string>();
 
     snapshot.forEach((docLog) => {
       const log = docLog.data();
-      // Filter lebih presisi di memori berdasarkan timestamp ISO
+      // Filter presisi
       if (log.timestamp && log.timestamp < sinceIso) return;
 
       if (log.type === "food" || log.type === "drink") {
         totalCalories += Number(log.calories) || 0;
-        totalSugar    += Number(log.sugar)    || 0;
-        totalProtein  += Number(log.protein)  || 0;
+        totalSugar    += Number(log.sugar) || Number(log.sugarg) || 0;
+        totalProtein  += Number(log.protein) || 0;
+        if (log.date) uniqueDays.add(log.date);
         count++;
       }
     });
 
-    // metabolicTrend: 0–100 berdasarkan rasio kalori yang masuk vs. ekspektasi dasar
-    // Estimasi sederhana: 2000 kcal/hari = 100 poin baseline
-    const rangeHours = timeRangeToMs(range) / (1000 * 60 * 60);
-    const expectedCalories = (2000 / 24) * rangeHours; // rata-rata per jam
-    const metabolicTrend = count === 0
-      ? 50 // netral jika tidak ada data
-      : Math.round(Math.min(100, Math.max(0, (totalCalories / Math.max(1, expectedCalories)) * 70 + (totalSugar < 10 ? 30 : 0))));
+    const daysCount = Math.max(1, uniqueDays.size);
+    const avgCalories = totalCalories / daysCount;
+    const avgSugar = totalSugar / daysCount;
+    const avgProtein = totalProtein / daysCount;
 
-    // energyTrend: 0–100 berdasarkan protein intake vs. sugar load
-    const energyTrend = count === 0
-      ? 60 // sedikit optimistis saat tidak ada data
-      : Math.round(Math.min(100, Math.max(0, (totalProtein * 2.5) - (totalSugar * 0.5) + 50)));
+    let metabolicScore = 0;
+    if (count > 0 && p) {
+      const stats = {
+        sugarConsumed: avgSugar,
+        caloriesConsumed: avgCalories,
+        proteinConsumed: avgProtein,
+        drinksCount: count > 0 ? 4 : 0, // Assumption for range averaging
+        totalItems: Math.max(1, Math.round(count / daysCount))
+      };
+      const healthMetrics = computeHealthMetrics(p, macroTargets, stats as any);
+      metabolicScore = 100 - healthMetrics.stress;
+    } else if (count > 0) {
+      metabolicScore = Math.round(Math.min(100, Math.max(0, 100 - (avgSugar * 2))));
+    }
 
-    return { timeRange: range, metabolicTrend, energyTrend };
+    // metabolicTrend is now a true delta (-100 to 100). Assume 85 is the user's baseline.
+    const metabolicTrend = count === 0 ? 0 : Math.round(metabolicScore - 85);
+
+    // energyTrend is also a delta. Compare average protein to target protein.
+    const energyTrend = count === 0 ? 0 : Math.round((avgProtein / Math.max(1, macroTargets.protein)) * 100 - 100);
+
+    return { timeRange: range, metabolicScore, metabolicTrend, energyTrend };
   },
 
   // ── GET /dashboard/status logic ─────────────────────────────────────────────
