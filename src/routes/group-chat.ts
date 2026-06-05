@@ -4,6 +4,7 @@ import { groupChatService } from "../services/group-chat.service.js";
 
 function handleError(err: unknown, reply: FastifyReply) {
   const e = err as Error & { statusCode?: number };
+
   return reply
     .code(e.statusCode ?? 500)
     .send({ error: e.message ?? "Internal server error." });
@@ -32,6 +33,7 @@ export async function groupChatRoutes(app: FastifyInstance): Promise<void> {
           request.user.uid,
           request.query.q,
         );
+
         return reply.send({ users });
       } catch (err) {
         return handleError(err, reply);
@@ -69,6 +71,7 @@ export async function groupChatRoutes(app: FastifyInstance): Promise<void> {
           request.user.uid,
           request.body,
         );
+
         return reply.code(201).send(result);
       } catch (err) {
         return handleError(err, reply);
@@ -100,6 +103,7 @@ export async function groupChatRoutes(app: FastifyInstance): Promise<void> {
           request.params.id,
           request.user.uid,
         );
+
         return reply.send(result);
       } catch (err) {
         return handleError(err, reply);
@@ -173,6 +177,7 @@ export async function groupChatRoutes(app: FastifyInstance): Promise<void> {
           request.user.uid,
           request.query.limit ?? 50,
         );
+
         return reply.send({ messages });
       } catch (err) {
         return handleError(err, reply);
@@ -203,6 +208,7 @@ export async function groupChatRoutes(app: FastifyInstance): Promise<void> {
           request.user.uid,
           request.body.text,
         );
+
         return reply.code(201).send(message);
       } catch (err) {
         return handleError(err, reply);

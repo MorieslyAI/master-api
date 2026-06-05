@@ -1,5 +1,8 @@
-import { FieldValue } from "firebase-admin/firestore";
-import { randomUUID } from "crypto";
+import {
+  FieldValue,
+  type DocumentReference,
+  type WriteBatch,
+} from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase.js";
 
 const COL_GROUP_CHATS = "group_chats";
@@ -23,6 +26,51 @@ export interface GroupInviteeSearchResult {
   id: string;
   displayName: string;
   avatarUrl: string;
+}
+
+function formatNameList(names: string[]): string {
+  const cleanNames = names.map((name) => name.trim()).filter(Boolean);
+
+  if (cleanNames.length === 0) return "member";
+  if (cleanNames.length === 1) return cleanNames[0];
+  if (cleanNames.length === 2) return `${cleanNames[0]} and ${cleanNames[1]}`;
+
+  return `${cleanNames.slice(0, 2).join(", ")} and ${cleanNames.length - 2} others`;
+}
+
+function queueSystemMessage(
+  batch: WriteBatch,
+  groupRef: DocumentReference,
+  payload: {
+    groupId: string;
+    text: string;
+    eventType: "member_invited" | "member_joined" | "member_left";
+    actorId: string;
+    actorName: string;
+    targetUserIds?: string[];
+    createdAt: string;
+  },
+) {
+  const msgRef = groupRef.collection(SUB_MESSAGES).doc();
+  const message = {
+    id: msgRef.id,
+    groupId: payload.groupId,
+    senderId: "system",
+    senderName: "System",
+    senderAvatar: "",
+    text: payload.text,
+    type: "system",
+    eventType: payload.eventType,
+    actorId: payload.actorId,
+    actorName: payload.actorName,
+    targetUserIds: payload.targetUserIds ?? [],
+    createdAt: payload.createdAt,
+    editedAt: null,
+    deletedAt: null,
+  };
+
+  batch.set(msgRef, message);
+  return message;
 }
 
 export const groupChatService = {
@@ -55,6 +103,7 @@ export const groupChatService = {
     );
 
     const results = new Map<string, GroupInviteeSearchResult>();
+
     for (const snapshot of snapshots) {
       for (const doc of snapshot.docs) {
         if (doc.id === userId || results.has(doc.id)) continue;
@@ -80,8 +129,8 @@ export const groupChatService = {
     const db = getDb();
     const now = new Date().toISOString();
     const groupRef = db.collection(COL_GROUP_CHATS).doc();
-
     const ownerDoc = await db.collection(COL_USERS).doc(ownerId).get();
+
     if (!ownerDoc.exists) throw httpError("User not found.", 404);
 
     const owner = ownerDoc.data() ?? {};
@@ -94,9 +143,9 @@ export const groupChatService = {
         db.collection(COL_USERS).doc(inviteeId).get(),
       ),
     );
+
     const validInvitees = inviteeDocs.filter((doc) => doc.exists);
     const memberIds = [ownerId, ...validInvitees.map((doc) => doc.id)];
-
     const batch = db.batch();
 
     batch.set(groupRef, {
@@ -115,28 +164,31 @@ export const groupChatService = {
     batch.set(groupRef.collection(SUB_MEMBERS).doc(ownerId), {
       userId: ownerId,
       displayName: owner["displayName"] ?? "Agent",
-      avatarUrl: "",
+      avatarUrl: String(owner["photoURL"] ?? ""),
       role: "owner",
       status: "joined",
       invitedBy: ownerId,
       invitedAt: now,
       joinedAt: now,
       lastReadAt: now,
+      leftAt: null,
     });
 
     for (const userDoc of validInvitees) {
       const inviteeId = userDoc.id;
       const user = userDoc.data() ?? {};
+
       batch.set(groupRef.collection(SUB_MEMBERS).doc(inviteeId), {
         userId: inviteeId,
         displayName: user["displayName"] ?? "Agent",
-        avatarUrl: "",
+        avatarUrl: String(user["photoURL"] ?? ""),
         role: "member",
         status: "invited",
         invitedBy: ownerId,
         invitedAt: now,
         joinedAt: null,
         lastReadAt: null,
+        leftAt: null,
       });
     }
 
@@ -151,7 +203,6 @@ export const groupChatService = {
 
   async listMyGroupChats(userId: string) {
     const db = getDb();
-
     const snap = await db
       .collection(COL_GROUP_CHATS)
       .where("memberIds", "array-contains", userId)
@@ -162,15 +213,11 @@ export const groupChatService = {
     const groups = await Promise.all(
       snap.docs.map(async (doc) => {
         const group = doc.data();
-
-        const memberDoc = await doc.ref
-          .collection(SUB_MEMBERS)
-          .doc(userId)
-          .get();
-
+        const [memberDoc, membersSnap] = await Promise.all([
+          doc.ref.collection(SUB_MEMBERS).doc(userId).get(),
+          doc.ref.collection(SUB_MEMBERS).get(),
+        ]);
         const member = memberDoc.data() ?? {};
-
-        const membersSnap = await doc.ref.collection(SUB_MEMBERS).get();
 
         const members = membersSnap.docs
           .map((memberDoc) => {
@@ -223,6 +270,7 @@ export const groupChatService = {
     }
 
     const member = memberDoc.data() ?? {};
+
     if (member["status"] !== "joined") {
       throw httpError("You have not joined this group yet.", 403);
     }
@@ -233,11 +281,8 @@ export const groupChatService = {
   async acceptInvite(groupId: string, userId: string) {
     const db = getDb();
     const now = new Date().toISOString();
-
     const groupRef = db.collection(COL_GROUP_CHATS).doc(groupId);
-
     const memberRef = groupRef.collection(SUB_MEMBERS).doc(userId);
-
     const snap = await memberRef.get();
 
     if (!snap.exists) {
@@ -254,11 +299,32 @@ export const groupChatService = {
       throw httpError("You cannot accept this invite.", 403);
     }
 
-    await memberRef.update({
+    const batch = db.batch();
+    const actorName = String(member["displayName"] ?? "Agent");
+    const message = queueSystemMessage(batch, groupRef, {
+      groupId,
+      text: `${actorName} joined the group`,
+      eventType: "member_joined",
+      actorId: userId,
+      actorName,
+      targetUserIds: [userId],
+      createdAt: now,
+    });
+
+    batch.update(memberRef, {
       status: "joined",
       joinedAt: now,
       lastReadAt: now,
+      leftAt: null,
     });
+
+    batch.update(groupRef, {
+      lastMessageText: message.text,
+      lastMessageAt: now,
+      updatedAt: now,
+    });
+
+    await batch.commit();
 
     return { success: true, alreadyJoined: false };
   },
@@ -267,8 +333,7 @@ export const groupChatService = {
     const db = getDb();
     const now = new Date().toISOString();
 
-    await this.assertJoinedMember(groupId, inviterId);
-
+    const inviterMember = await this.assertJoinedMember(groupId, inviterId);
     const groupRef = db.collection(COL_GROUP_CHATS).doc(groupId);
     const groupSnap = await groupRef.get();
 
@@ -307,18 +372,21 @@ export const groupChatService = {
 
     const batch = db.batch();
     const invitedUserIds: string[] = [];
+    const invitedNames: string[] = [];
 
     for (const userDoc of validInvitees) {
       const inviteeId = userDoc.id;
       const user = userDoc.data() ?? {};
+      const displayName = String(user["displayName"] ?? "Agent");
 
       invitedUserIds.push(inviteeId);
+      invitedNames.push(displayName);
 
       batch.set(
         groupRef.collection(SUB_MEMBERS).doc(inviteeId),
         {
           userId: inviteeId,
-          displayName: user["displayName"] ?? "Agent",
+          displayName,
           avatarUrl: String(user["photoURL"] ?? ""),
           role: "member",
           status: "invited",
@@ -332,8 +400,22 @@ export const groupChatService = {
       );
     }
 
+    const inviterName = String(inviterMember["displayName"] ?? "Agent");
+    const messageText = `${inviterName} invited ${formatNameList(invitedNames)} to the group`;
+    const message = queueSystemMessage(batch, groupRef, {
+      groupId,
+      text: messageText,
+      eventType: "member_invited",
+      actorId: inviterId,
+      actorName: inviterName,
+      targetUserIds: invitedUserIds,
+      createdAt: now,
+    });
+
     batch.update(groupRef, {
       memberIds: FieldValue.arrayUnion(...invitedUserIds),
+      lastMessageText: message.text,
+      lastMessageAt: now,
       updatedAt: now,
     });
 
@@ -351,7 +433,6 @@ export const groupChatService = {
     const now = new Date().toISOString();
 
     const member = await this.assertJoinedMember(groupId, userId);
-
     const groupRef = db.collection(COL_GROUP_CHATS).doc(groupId);
     const groupSnap = await groupRef.get();
 
@@ -363,10 +444,18 @@ export const groupChatService = {
     const memberIds = Array.isArray(group["memberIds"])
       ? (group["memberIds"] as string[])
       : [];
-
     const remainingMemberIds = memberIds.filter((id) => id !== userId);
-
     const batch = db.batch();
+    const actorName = String(member["displayName"] ?? "Agent");
+    const message = queueSystemMessage(batch, groupRef, {
+      groupId,
+      text: `${actorName} left the group`,
+      eventType: "member_left",
+      actorId: userId,
+      actorName,
+      targetUserIds: [userId],
+      createdAt: now,
+    });
 
     batch.update(groupRef.collection(SUB_MEMBERS).doc(userId), {
       status: "left",
@@ -375,10 +464,12 @@ export const groupChatService = {
       lastReadAt: now,
     });
 
-    batch.update(groupRef, {
+    const groupUpdate: Record<string, any> = {
       memberIds: FieldValue.arrayRemove(userId),
+      lastMessageText: message.text,
+      lastMessageAt: now,
       updatedAt: now,
-    });
+    };
 
     if (member["role"] === "owner" && remainingMemberIds.length > 0) {
       const remainingMemberDocs = await Promise.all(
@@ -397,12 +488,11 @@ export const groupChatService = {
           role: "owner",
         });
 
-        batch.update(groupRef, {
-          createdBy: nextOwnerDoc.id,
-        });
+        groupUpdate.createdBy = nextOwnerDoc.id;
       }
     }
 
+    batch.update(groupRef, groupUpdate);
     await batch.commit();
 
     return {
@@ -430,12 +520,9 @@ export const groupChatService = {
 
     const db = getDb();
     const now = new Date().toISOString();
-
     const member = await this.assertJoinedMember(groupId, userId);
-
     const groupRef = db.collection(COL_GROUP_CHATS).doc(groupId);
     const msgRef = groupRef.collection(SUB_MESSAGES).doc();
-
     const message = {
       id: msgRef.id,
       groupId,
@@ -443,13 +530,13 @@ export const groupChatService = {
       senderName: member["displayName"] ?? "Agent",
       senderAvatar: member["avatarUrl"] ?? "",
       text: text.trim(),
+      type: "text",
       createdAt: now,
       editedAt: null,
       deletedAt: null,
     };
 
     const batch = db.batch();
-
     batch.set(msgRef, message);
     batch.update(groupRef, {
       lastMessageText: message.text,
@@ -458,7 +545,6 @@ export const groupChatService = {
     });
 
     await batch.commit();
-
     return message;
   },
 };
