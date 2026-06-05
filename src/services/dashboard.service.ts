@@ -467,6 +467,7 @@ export const dashboardService = {
     let fiberConsumed = 0;
     let drinksCount = 0;
     let caloriesBurned = 0;
+    let nutritionItems = 0;
     const historyItems: any[] = [];
 
     logsSnapshot.forEach((docLog) => {
@@ -478,9 +479,10 @@ export const dashboardService = {
         proteinConsumed += Number(log.protein) || 0;
         carbsConsumed += Number(log.carbs) || 0;
         fatConsumed += Number(log.fat) || 0;
-        sugarConsumed += Number(log.sugar) || 0;
+        sugarConsumed += Number(log.sugar) || Number(log.sugarg) || 0;
         fiberConsumed += Number(log.fiber) || 0;
         if (log.type === "drink") drinksCount += 1;
+        nutritionItems += 1;
       } else if (log.type === "workout") {
         caloriesBurned += Number(log.caloriesBurned) || 0;
       }
@@ -491,12 +493,13 @@ export const dashboardService = {
       caloriesConsumed,
       proteinConsumed,
       drinksCount,
-      totalItems: logsSnapshot.size,
+      totalItems: nutritionItems,
     };
 
     // 3. Kalkulasi Metrics (Health, AI Insights, dll) sama seperti `getMetrics` sebelumnya
     const macroTargets = computeMacroTargets(p);
     const healthMetrics = computeHealthMetrics(p, macroTargets, stats);
+    const metabolicScore = computeMetabolicScore(p, macroTargets, stats);
     const metabolicInsight = computeMetabolicInsight(p, macroTargets, stats);
     const dailyDirective = computeDailyDirective(p, macroTargets, stats);
 
@@ -538,7 +541,7 @@ export const dashboardService = {
         stress: healthMetrics.stress,
         recovery: healthMetrics.recovery,
         glucose: healthMetrics.glucose,
-        metabolicScore: 100 - healthMetrics.stress, // Simple calculation
+        metabolicScore,
       },
       nutrition: {
         summary: {
