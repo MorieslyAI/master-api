@@ -19,7 +19,63 @@ export interface CreateGroupChatDTO {
   inviteeIds: string[];
 }
 
+export interface GroupInviteeSearchResult {
+  id: string;
+  displayName: string;
+  avatarUrl: string;
+}
+
 export const groupChatService = {
+  async searchInvitees(
+    userId: string,
+    query: string,
+  ): Promise<GroupInviteeSearchResult[]> {
+    const db = getDb();
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.length < 2) return [];
+
+    const variants = [
+      normalizedQuery,
+      normalizedQuery.toLowerCase(),
+      normalizedQuery.toUpperCase(),
+      normalizedQuery.charAt(0).toUpperCase() +
+        normalizedQuery.slice(1).toLowerCase(),
+    ];
+
+    const snapshots = await Promise.all(
+      [...new Set(variants)].map((variant) =>
+        db
+          .collection(COL_USERS)
+          .orderBy("displayName")
+          .startAt(variant)
+          .endAt(`${variant}\uf8ff`)
+          .limit(10)
+          .get(),
+      ),
+    );
+
+    const results = new Map<string, GroupInviteeSearchResult>();
+    for (const snapshot of snapshots) {
+      for (const doc of snapshot.docs) {
+        if (doc.id === userId || results.has(doc.id)) continue;
+
+        const data = doc.data();
+        const displayName = String(data["displayName"] ?? "").trim();
+        if (!displayName) continue;
+
+        results.set(doc.id, {
+          id: doc.id,
+          displayName,
+          avatarUrl: String(data["photoURL"] ?? ""),
+        });
+      }
+    }
+
+    return [...results.values()]
+      .sort((a, b) => a.displayName.localeCompare(b.displayName))
+      .slice(0, 10);
+  },
+
   async createGroupChat(ownerId: string, payload: CreateGroupChatDTO) {
     const db = getDb();
     const now = new Date().toISOString();
@@ -33,7 +89,13 @@ export const groupChatService = {
       (id) => id && id !== ownerId,
     );
 
-    const memberIds = [ownerId, ...uniqueInvitees];
+    const inviteeDocs = await Promise.all(
+      uniqueInvitees.map((inviteeId) =>
+        db.collection(COL_USERS).doc(inviteeId).get(),
+      ),
+    );
+    const validInvitees = inviteeDocs.filter((doc) => doc.exists);
+    const memberIds = [ownerId, ...validInvitees.map((doc) => doc.id)];
 
     const batch = db.batch();
 
@@ -62,10 +124,8 @@ export const groupChatService = {
       lastReadAt: now,
     });
 
-    for (const inviteeId of uniqueInvitees) {
-      const userDoc = await db.collection(COL_USERS).doc(inviteeId).get();
-      if (!userDoc.exists) continue;
-
+    for (const userDoc of validInvitees) {
+      const inviteeId = userDoc.id;
       const user = userDoc.data() ?? {};
       batch.set(groupRef.collection(SUB_MEMBERS).doc(inviteeId), {
         userId: inviteeId,

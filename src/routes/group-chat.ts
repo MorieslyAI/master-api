@@ -10,6 +10,35 @@ function handleError(err: unknown, reply: FastifyReply) {
 }
 
 export async function groupChatRoutes(app: FastifyInstance): Promise<void> {
+  app.get<{ Querystring: { q: string } }>(
+    "/group-chats/users/search",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["q"],
+          properties: {
+            q: { type: "string", minLength: 2, maxLength: 80 },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const users = await groupChatService.searchInvitees(
+          request.user.uid,
+          request.query.q,
+        );
+        return reply.send({ users });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
   app.post<{
     Body: { name: string; description?: string; inviteeIds: string[] };
   }>(
