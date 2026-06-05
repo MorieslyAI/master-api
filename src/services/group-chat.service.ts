@@ -151,28 +151,49 @@ export const groupChatService = {
 
   async listMyGroupChats(userId: string) {
     const db = getDb();
-  
+
     const snap = await db
       .collection(COL_GROUP_CHATS)
       .where("memberIds", "array-contains", userId)
       .orderBy("updatedAt", "desc")
       .limit(50)
       .get();
-  
+
     const groups = await Promise.all(
       snap.docs.map(async (doc) => {
         const group = doc.data();
-  
+
         const memberDoc = await doc.ref
           .collection(SUB_MEMBERS)
           .doc(userId)
           .get();
-  
+
         const member = memberDoc.data() ?? {};
-  
+
+        const membersSnap = await doc.ref.collection(SUB_MEMBERS).get();
+
+        const members = membersSnap.docs
+          .map((memberDoc) => {
+            const data = memberDoc.data() ?? {};
+
+            return {
+              id: memberDoc.id,
+              userId: data["userId"] ?? memberDoc.id,
+              displayName: data["displayName"] ?? "Agent",
+              avatarUrl: data["avatarUrl"] ?? "",
+              role: data["role"] ?? "member",
+              status: data["status"] ?? "invited",
+              invitedAt: data["invitedAt"] ?? null,
+              joinedAt: data["joinedAt"] ?? null,
+              leftAt: data["leftAt"] ?? null,
+            };
+          })
+          .filter((member) => member.status !== "left");
+
         return {
           ...group,
           id: doc.id,
+          members,
           currentMember: memberDoc.exists
             ? {
                 status: member["status"] ?? "invited",
@@ -185,7 +206,7 @@ export const groupChatService = {
         };
       }),
     );
-  
+
     return groups;
   },
 
@@ -212,36 +233,181 @@ export const groupChatService = {
   async acceptInvite(groupId: string, userId: string) {
     const db = getDb();
     const now = new Date().toISOString();
-  
+
     const groupRef = db.collection(COL_GROUP_CHATS).doc(groupId);
-  
-    const memberRef = groupRef
-      .collection(SUB_MEMBERS)
-      .doc(userId);
-  
+
+    const memberRef = groupRef.collection(SUB_MEMBERS).doc(userId);
+
     const snap = await memberRef.get();
-  
+
     if (!snap.exists) {
       throw httpError("Invite not found.", 404);
     }
-  
+
     const member = snap.data() ?? {};
-  
+
     if (member["status"] === "joined") {
       return { success: true, alreadyJoined: true };
     }
-  
+
     if (member["status"] !== "invited") {
       throw httpError("You cannot accept this invite.", 403);
     }
-  
+
     await memberRef.update({
       status: "joined",
       joinedAt: now,
       lastReadAt: now,
     });
-  
+
     return { success: true, alreadyJoined: false };
+  },
+
+  async addMembers(groupId: string, inviterId: string, inviteeIds: string[]) {
+    const db = getDb();
+    const now = new Date().toISOString();
+
+    await this.assertJoinedMember(groupId, inviterId);
+
+    const groupRef = db.collection(COL_GROUP_CHATS).doc(groupId);
+    const groupSnap = await groupRef.get();
+
+    if (!groupSnap.exists) {
+      throw httpError("Group not found.", 404);
+    }
+
+    const group = groupSnap.data() ?? {};
+    const existingMemberIds = new Set<string>(
+      Array.isArray(group["memberIds"]) ? group["memberIds"] : [],
+    );
+
+    const uniqueInviteeIds = [...new Set(inviteeIds)]
+      .filter((id) => id && id !== inviterId)
+      .filter((id) => !existingMemberIds.has(id));
+
+    if (uniqueInviteeIds.length === 0) {
+      return {
+        success: true,
+        addedCount: 0,
+        invitedUserIds: [],
+      };
+    }
+
+    const inviteeDocs = await Promise.all(
+      uniqueInviteeIds.map((inviteeId) =>
+        db.collection(COL_USERS).doc(inviteeId).get(),
+      ),
+    );
+
+    const validInvitees = inviteeDocs.filter((doc) => doc.exists);
+
+    if (validInvitees.length === 0) {
+      throw httpError("No valid users to invite.", 400);
+    }
+
+    const batch = db.batch();
+    const invitedUserIds: string[] = [];
+
+    for (const userDoc of validInvitees) {
+      const inviteeId = userDoc.id;
+      const user = userDoc.data() ?? {};
+
+      invitedUserIds.push(inviteeId);
+
+      batch.set(
+        groupRef.collection(SUB_MEMBERS).doc(inviteeId),
+        {
+          userId: inviteeId,
+          displayName: user["displayName"] ?? "Agent",
+          avatarUrl: String(user["photoURL"] ?? ""),
+          role: "member",
+          status: "invited",
+          invitedBy: inviterId,
+          invitedAt: now,
+          joinedAt: null,
+          lastReadAt: null,
+          leftAt: null,
+        },
+        { merge: true },
+      );
+    }
+
+    batch.update(groupRef, {
+      memberIds: FieldValue.arrayUnion(...invitedUserIds),
+      updatedAt: now,
+    });
+
+    await batch.commit();
+
+    return {
+      success: true,
+      addedCount: invitedUserIds.length,
+      invitedUserIds,
+    };
+  },
+
+  async leaveGroup(groupId: string, userId: string) {
+    const db = getDb();
+    const now = new Date().toISOString();
+
+    const member = await this.assertJoinedMember(groupId, userId);
+
+    const groupRef = db.collection(COL_GROUP_CHATS).doc(groupId);
+    const groupSnap = await groupRef.get();
+
+    if (!groupSnap.exists) {
+      throw httpError("Group not found.", 404);
+    }
+
+    const group = groupSnap.data() ?? {};
+    const memberIds = Array.isArray(group["memberIds"])
+      ? (group["memberIds"] as string[])
+      : [];
+
+    const remainingMemberIds = memberIds.filter((id) => id !== userId);
+
+    const batch = db.batch();
+
+    batch.update(groupRef.collection(SUB_MEMBERS).doc(userId), {
+      status: "left",
+      role: "member",
+      leftAt: now,
+      lastReadAt: now,
+    });
+
+    batch.update(groupRef, {
+      memberIds: FieldValue.arrayRemove(userId),
+      updatedAt: now,
+    });
+
+    if (member["role"] === "owner" && remainingMemberIds.length > 0) {
+      const remainingMemberDocs = await Promise.all(
+        remainingMemberIds.map((memberId) =>
+          groupRef.collection(SUB_MEMBERS).doc(memberId).get(),
+        ),
+      );
+
+      const nextOwnerDoc = remainingMemberDocs.find((doc) => {
+        const data = doc.data() ?? {};
+        return data["status"] === "joined";
+      });
+
+      if (nextOwnerDoc) {
+        batch.update(nextOwnerDoc.ref, {
+          role: "owner",
+        });
+
+        batch.update(groupRef, {
+          createdBy: nextOwnerDoc.id,
+        });
+      }
+    }
+
+    await batch.commit();
+
+    return {
+      success: true,
+    };
   },
 
   async getMessages(groupId: string, userId: string, limit = 50) {

@@ -81,7 +81,9 @@ export async function groupChatRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: authenticate },
     async (request, reply) => {
       try {
-        const groups = await groupChatService.listMyGroupChats(request.user.uid);
+        const groups = await groupChatService.listMyGroupChats(
+          request.user.uid,
+        );
         return reply.send({ groups });
       } catch (err) {
         return handleError(err, reply);
@@ -98,6 +100,62 @@ export async function groupChatRoutes(app: FastifyInstance): Promise<void> {
           request.params.id,
           request.user.uid,
         );
+        return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  app.post<{
+    Params: { id: string };
+    Body: { inviteeIds: string[] };
+  }>(
+    "/group-chats/:id/members",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+      schema: {
+        body: {
+          type: "object",
+          required: ["inviteeIds"],
+          properties: {
+            inviteeIds: {
+              type: "array",
+              minItems: 1,
+              maxItems: 30,
+              items: { type: "string" },
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await groupChatService.addMembers(
+          request.params.id,
+          request.user.uid,
+          request.body.inviteeIds,
+        );
+
+        return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/group-chats/:id/leave",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      try {
+        const result = await groupChatService.leaveGroup(
+          request.params.id,
+          request.user.uid,
+        );
+
         return reply.send(result);
       } catch (err) {
         return handleError(err, reply);
