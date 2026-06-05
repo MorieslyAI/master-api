@@ -266,6 +266,33 @@ function computeHealthMetrics(
   return { recovery, hydration, stress, glucose };
 }
 
+function computeMetabolicScore(
+  p: StoredProfile | undefined,
+  macros: MacroTargets,
+  stats: DashboardQueryStats,
+): number {
+  if (stats.totalItems <= 0) return 0;
+
+  if (!p) {
+    return Math.round(Math.min(100, Math.max(0, 100 - stats.sugarConsumed * 2)));
+  }
+
+  const healthMetrics = computeHealthMetrics(p, macros, stats);
+  const glucoseControl = 100 - Math.min(100, (stats.sugarConsumed / Math.max(1, p.sugarLimit)) * 100);
+  const calorieControl = 100 - Math.min(100, (stats.caloriesConsumed / Math.max(1, macros.calories)) * 100);
+  const proteinAdequacy = Math.min(100, (stats.proteinConsumed / Math.max(1, macros.protein)) * 100);
+  const hydrationAdequacy = Math.min(100, (stats.drinksCount / 4) * 100);
+
+  const score =
+    glucoseControl * 0.35 +
+    proteinAdequacy * 0.25 +
+    hydrationAdequacy * 0.2 +
+    calorieControl * 0.1 +
+    (100 - healthMetrics.stress) * 0.1;
+
+  return Math.round(Math.min(100, Math.max(0, score)));
+}
+
 // ─── Daily Directive Generator ────────────────────────────────────────────────
 // Returns personalised recommendations based on profile + time of day.
 
@@ -613,11 +640,13 @@ export const dashboardService = {
     const p = data["profile"] as StoredProfile | undefined;
     const macroTargets = p ? computeMacroTargets(p) : { calories: 2000, protein: 120, carbs: 250, fat: 65, fiber: 25 };
 
-    const sinceMs = Date.now() - timeRangeToMs(range);
-    const sinceIso = new Date(sinceMs).toISOString();
+    const rangeMs = timeRangeToMs(range);
+    const nowMs = Date.now();
+    const currentStartMs = nowMs - rangeMs;
+    const previousStartMs = currentStartMs - rangeMs;
 
-    // Ambil log user sejak tanggal paling awal dalam rentang
-    const sinceDate = new Date(sinceMs).toISOString().split("T")[0];
+    // Ambil log sejak awal periode pembanding agar trend bisa dihitung sebagai delta nyata.
+    const sinceDate = new Date(previousStartMs).toISOString().split("T")[0];
     const snapshot = await db
       .collection(COL_USERS)
       .doc(userId)
@@ -625,51 +654,68 @@ export const dashboardService = {
       .where("date", ">=", sinceDate)
       .get();
 
-    let totalCalories = 0;
-    let totalSugar = 0;
-    let totalProtein = 0;
-    let count = 0;
-    const uniqueDays = new Set<string>();
+    const createBucket = () => ({
+      totalCalories: 0,
+      totalSugar: 0,
+      totalProtein: 0,
+      drinksCount: 0,
+      totalItems: 0,
+      uniqueDays: new Set<string>(),
+    });
+
+    const current = createBucket();
+    const previous = createBucket();
+
+    const addLog = (bucket: ReturnType<typeof createBucket>, log: FirebaseFirestore.DocumentData, timestampMs: number) => {
+      bucket.totalCalories += Number(log.calories) || 0;
+      bucket.totalSugar += Number(log.sugar) || Number(log.sugarg) || 0;
+      bucket.totalProtein += Number(log.protein) || 0;
+      if (log.type === "drink") bucket.drinksCount += 1;
+      bucket.totalItems += 1;
+      bucket.uniqueDays.add(log.date || new Date(timestampMs).toISOString().split("T")[0]);
+    };
 
     snapshot.forEach((docLog) => {
       const log = docLog.data();
-      // Filter presisi
-      if (log.timestamp && log.timestamp < sinceIso) return;
+      if (log.type !== "food" && log.type !== "drink") return;
 
-      if (log.type === "food" || log.type === "drink") {
-        totalCalories += Number(log.calories) || 0;
-        totalSugar    += Number(log.sugar) || Number(log.sugarg) || 0;
-        totalProtein  += Number(log.protein) || 0;
-        if (log.date) uniqueDays.add(log.date);
-        count++;
+      const timestampMs = log.timestamp
+        ? new Date(log.timestamp).getTime()
+        : log.date
+          ? new Date(`${log.date}T00:00:00.000Z`).getTime()
+          : 0;
+
+      if (!Number.isFinite(timestampMs) || timestampMs < previousStartMs || timestampMs > nowMs) return;
+
+      if (timestampMs >= currentStartMs) {
+        addLog(current, log, timestampMs);
+      } else {
+        addLog(previous, log, timestampMs);
       }
     });
 
-    const daysCount = Math.max(1, uniqueDays.size);
-    const avgCalories = totalCalories / daysCount;
-    const avgSugar = totalSugar / daysCount;
-    const avgProtein = totalProtein / daysCount;
+    const toStats = (bucket: ReturnType<typeof createBucket>): DashboardQueryStats => {
+      const daysCount = Math.max(1, bucket.uniqueDays.size);
 
-    let metabolicScore = 0;
-    if (count > 0 && p) {
-      const stats = {
-        sugarConsumed: avgSugar,
-        caloriesConsumed: avgCalories,
-        proteinConsumed: avgProtein,
-        drinksCount: count > 0 ? 4 : 0, // Assumption for range averaging
-        totalItems: Math.max(1, Math.round(count / daysCount))
+      return {
+        sugarConsumed: bucket.totalSugar / daysCount,
+        caloriesConsumed: bucket.totalCalories / daysCount,
+        proteinConsumed: bucket.totalProtein / daysCount,
+        drinksCount: bucket.drinksCount / daysCount,
+        totalItems: bucket.totalItems,
       };
-      const healthMetrics = computeHealthMetrics(p, macroTargets, stats as any);
-      metabolicScore = 100 - healthMetrics.stress;
-    } else if (count > 0) {
-      metabolicScore = Math.round(Math.min(100, Math.max(0, 100 - (avgSugar * 2))));
-    }
+    };
 
-    // metabolicTrend is now a true delta (-100 to 100). Assume 85 is the user's baseline.
-    const metabolicTrend = count === 0 ? 0 : Math.round(metabolicScore - 85);
+    const currentStats = toStats(current);
+    const previousStats = toStats(previous);
+    const metabolicScore = computeMetabolicScore(p, macroTargets, currentStats);
+    const previousMetabolicScore = computeMetabolicScore(p, macroTargets, previousStats);
 
-    // energyTrend is also a delta. Compare average protein to target protein.
-    const energyTrend = count === 0 ? 0 : Math.round((avgProtein / Math.max(1, macroTargets.protein)) * 100 - 100);
+    const metabolicTrend = previous.totalItems === 0 ? 0 : Math.round(metabolicScore - previousMetabolicScore);
+
+    const currentEnergy = Math.min(100, (currentStats.proteinConsumed / Math.max(1, macroTargets.protein)) * 100);
+    const previousEnergy = Math.min(100, (previousStats.proteinConsumed / Math.max(1, macroTargets.protein)) * 100);
+    const energyTrend = previous.totalItems === 0 ? 0 : Math.round(currentEnergy - previousEnergy);
 
     return { timeRange: range, metabolicScore, metabolicTrend, energyTrend };
   },
