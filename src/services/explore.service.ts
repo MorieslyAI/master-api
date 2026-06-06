@@ -415,6 +415,7 @@ export const exploreService = {
     
     // Convert base64 image if present, we just keep the base64 or assuming it's already a URL for simplicity.
     // If it's a raw base64, we store it directly (though saving big base64 to Firestore isn't optimal, assuming it's handling like imageUrl).
+    const imageUrl = data.imageBase64 || null;
     const postRef = db.collection(COL_POSTS).doc(data.postId);
     const commentRef = postRef.collection("comments").doc();
 
@@ -433,6 +434,8 @@ export const exploreService = {
     };
 
     await commentRef.set(newComment);
+
+    if (data.parentId) {
       const parentRef = postRef.collection("comments").doc(data.parentId);
       await parentRef.update({
         repliesCount: FieldValue.increment(1)
@@ -444,7 +447,7 @@ export const exploreService = {
       comments: FieldValue.increment(1)
     });
 
-    return { id: commentRef.id, ...newComment };
+    return newComment;
   },
 
   async toggleCommentLike(
