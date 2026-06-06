@@ -51,6 +51,20 @@ export interface SocialPost {
   createdAt:      string; // ISO 8601
 }
 
+export interface SocialComment {
+  id: string;
+  postId: string;
+  parentId?: string | null;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string | null;
+  content: string;
+  imageUrl?: string | null;
+  createdAt: string;
+  likes: number;
+  repliesCount?: number;
+}
+
 export interface ShopProduct {
   id:        string;
   name:      string;
@@ -327,6 +341,150 @@ export const exploreService = {
 
     const updated = await postRef.get();
     return { joined: !isMember, members: updated.data()?.["members"] ?? 0 };
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // POST COMMENTS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async getPostComments(
+    postId: string,
+    currentUserId: string,
+    opts: { sort?: "top" | "newest"; limit?: number; parentId?: string | null }
+  ): Promise<{ comments: (SocialComment & { likedByMe: boolean })[] }> {
+    const db = getDb();
+    const limit = Math.min(opts.limit ?? 20, 50);
+
+    let query: any = db.collection(COL_POSTS).doc(postId).collection("comments");
+
+    if (opts.parentId) {
+      query = query.where("parentId", "==", opts.parentId);
+    } else {
+      // If we only want top level comments, we could check parentId == null.
+      // Firestore requires an index, or we just filter where parentId == null.
+      query = query.where("parentId", "==", null);
+    }
+
+    if (opts.sort === "top") {
+      query = query.orderBy("likes", "desc");
+    } else {
+      query = query.orderBy("createdAt", "desc");
+    }
+
+    const snap = await query.limit(limit).get();
+    const comments: (SocialComment & { likedByMe: boolean })[] = [];
+
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      const likeSnap = await doc.ref.collection("likes").doc(currentUserId).get();
+      
+      comments.push({
+        id: doc.id,
+        postId: data.postId,
+        parentId: data.parentId,
+        authorId: data.authorId,
+        authorName: data.authorName,
+        authorAvatar: data.authorAvatar,
+        content: data.content,
+        imageUrl: data.imageUrl,
+        createdAt: data.createdAt,
+        likes: data.likes || 0,
+        repliesCount: data.repliesCount || 0,
+        likedByMe: likeSnap.exists,
+      });
+    }
+
+    return { comments };
+  },
+
+  async createPostComment(
+    userId: string,
+    data: {
+      postId: string;
+      content: string;
+      parentId?: string | null;
+      imageBase64?: string | null;
+    }
+  ): Promise<SocialComment> {
+    const db = getDb();
+    const userDoc = await db.collection(COL_USERS).doc(userId).get();
+    if (!userDoc.exists) throw httpError("User not found.", 404);
+
+    const userData = userDoc.data() as Record<string, any>;
+    const authorName = userData["displayName"] ?? "Anonymous";
+    
+    // Convert base64 image if present, we just keep the base64 or assuming it's already a URL for simplicity.
+    // If it's a raw base64, we store it directly (though saving big base64 to Firestore isn't optimal, assuming it's handling like imageUrl).
+    const postRef = db.collection(COL_POSTS).doc(data.postId);
+    const commentRef = postRef.collection("comments").doc();
+
+    const newComment = {
+      id: commentRef.id,
+      postId: data.postId,
+      parentId: data.parentId || null,
+      authorId: userId,
+      authorName,
+      authorAvatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName)}&background=0D8ABC&color=fff`,
+      content: data.content,
+      imageUrl,
+      createdAt: new Date().toISOString(),
+      likes: 0,
+      repliesCount: 0,
+    };
+
+    await commentRef.set(newComment);
+      const parentRef = postRef.collection("comments").doc(data.parentId);
+      await parentRef.update({
+        repliesCount: FieldValue.increment(1)
+      });
+    }
+
+    // Increment post comments count
+    await postRef.update({
+      comments: FieldValue.increment(1)
+    });
+
+    return { id: commentRef.id, ...newComment };
+  },
+
+  async toggleCommentLike(
+    commentId: string,
+    userId: string
+  ): Promise<{ liked: boolean; likes: number }> {
+    const db = getDb();
+    
+    // Find the comment via collectionGroup because we don't receive postId 
+    const snap = await db.collectionGroup("comments")
+      .where("id", "==", commentId)
+      .limit(1)
+      .get();
+      
+    if (snap.empty) {
+      throw httpError("Comment not found.", 404);
+    }
+    
+    const commentDoc = snap.docs[0];
+    const commentRef = commentDoc.ref;
+    const likeRef = commentRef.collection("likes").doc(userId);
+
+    const likeSnap = await likeRef.get();
+    const alreadyLiked = likeSnap.exists;
+
+    if (alreadyLiked) {
+      await Promise.all([
+        likeRef.delete(),
+        commentRef.update({ likes: FieldValue.increment(-1) })
+      ]);
+      const updated = await commentRef.get();
+      return { liked: false, likes: updated.data()?.["likes"] ?? 0 };
+    } else {
+      await Promise.all([
+        likeRef.set({ userId, createdAt: new Date().toISOString() }),
+        commentRef.update({ likes: FieldValue.increment(1) })
+      ]);
+      const updated = await commentRef.get();
+      return { liked: true, likes: updated.data()?.["likes"] ?? 0 };
+    }
   },
 
   // ══════════════════════════════════════════════════════════════════════════

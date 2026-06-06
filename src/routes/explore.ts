@@ -276,6 +276,128 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // ══════════════════════════════════════════════════════════════════════════
+  // POST COMMENTS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── GET /explore/posts/:id/comments ───────────────────────────────────────
+  app.get<{
+    Params: { id: string };
+    Querystring: { sort?: "top" | "newest"; limit?: number; parentId?: string };
+  }>(
+    "/explore/posts/:id/comments",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+      schema: {
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string" } },
+        },
+        querystring: {
+          type: "object",
+          properties: {
+            sort: { type: "string", enum: ["top", "newest"] },
+            limit: { type: "number", minimum: 1, maximum: 50 },
+            parentId: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await exploreService.getPostComments(
+          request.params.id,
+          request.user.uid,
+          {
+            sort: request.query.sort,
+            limit: request.query.limit,
+            parentId: request.query.parentId,
+          }
+        );
+        return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── POST /explore/posts/:id/comments ──────────────────────────────────────
+  app.post<{
+    Params: { id: string };
+    Body: { content: string; parentId?: string; imageBase64?: string };
+  }>(
+    "/explore/posts/:id/comments",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+      schema: {
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string" } },
+        },
+        body: {
+          type: "object",
+          required: ["content"],
+          properties: {
+            content: { type: "string", minLength: 1, maxLength: 2000 },
+            parentId: { type: "string" },
+            imageBase64: { type: "string" },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await exploreService.createPostComment(
+          request.user.uid,
+          {
+            postId: request.params.id,
+            content: request.body.content,
+            parentId: request.body.parentId,
+            imageBase64: request.body.imageBase64,
+          }
+        );
+        return reply.code(201).send({ success: true, comment: result });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── POST /explore/comments/:id/like ───────────────────────────────────────
+  app.post<{
+    Params: { id: string };
+  }>(
+    "/explore/comments/:id/like",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+      schema: {
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: { id: { type: "string" } },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const result = await exploreService.toggleCommentLike(
+          request.params.id,
+          request.user.uid
+        );
+        return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
   // LEADERBOARD
   // ══════════════════════════════════════════════════════════════════════════
 
