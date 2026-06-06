@@ -33,6 +33,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         },
       }),
     },
+    bodyLimit: 10485760,
     trustProxy: true,
   });
 
