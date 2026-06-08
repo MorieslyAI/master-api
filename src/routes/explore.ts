@@ -14,7 +14,6 @@ function handleError(err: unknown, reply: FastifyReply): void {
 // ─── Explore Routes ───────────────────────────────────────────────────────────
 
 export async function exploreRoutes(app: FastifyInstance): Promise<void> {
-
   // ══════════════════════════════════════════════════════════════════════════
   // NEWS
   // ══════════════════════════════════════════════════════════════════════════
@@ -22,7 +21,12 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
   // ── GET /explore/news ─────────────────────────────────────────────────────
   // Ambil artikel berita. Optional filter: category, q (search), limit, after (cursor).
   app.get<{
-    Querystring: { category?: string; q?: string; limit?: number; after?: string };
+    Querystring: {
+      category?: string;
+      q?: string;
+      limit?: number;
+      after?: string;
+    };
   }>(
     "/explore/news",
     {
@@ -33,9 +37,9 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
           type: "object",
           properties: {
             category: { type: "string" },
-            q:        { type: "string" },
-            limit:    { type: "number", minimum: 1, maximum: 50 },
-            after:    { type: "string" },
+            q: { type: "string" },
+            limit: { type: "number", minimum: 1, maximum: 50 },
+            after: { type: "string" },
           },
           additionalProperties: false,
         },
@@ -45,9 +49,9 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       try {
         const result = await exploreService.getNews({
           category: request.query.category,
-          q:        request.query.q,
-          limit:    request.query.limit,
-          after:    request.query.after,
+          q: request.query.q,
+          limit: request.query.limit,
+          after: request.query.after,
         });
         return reply.send(result);
       } catch (err) {
@@ -73,7 +77,10 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
         querystring: {
           type: "object",
           properties: {
-            type:  { type: "string", enum: ["post", "event", "video", "group", "all"] },
+            type: {
+              type: "string",
+              enum: ["post", "event", "video", "group", "all"],
+            },
             limit: { type: "number", minimum: 1, maximum: 50 },
             after: { type: "string" },
           },
@@ -84,7 +91,7 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       try {
         const result = await exploreService.getPosts({
-          type:  request.query.type as PostType | "all" | undefined,
+          type: request.query.type as PostType | "all" | undefined,
           limit: request.query.limit,
           after: request.query.after,
         });
@@ -99,12 +106,12 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
   // Buat post baru. Body: { content, type?, mediaUrl?, videoThumbnail?, duration?, eventDate? }
   app.post<{
     Body: {
-      content:         string;
-      type?:           PostType;
-      mediaUrl?:       string;
+      content: string;
+      type?: PostType;
+      mediaUrl?: string;
       videoThumbnail?: string;
-      duration?:       string;
-      eventDate?:      string;
+      duration?: string;
+      eventDate?: string;
     };
   }>(
     "/explore/posts",
@@ -116,12 +123,12 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
           type: "object",
           required: ["content"],
           properties: {
-            content:         { type: "string", minLength: 1, maxLength: 1000 },
-            type:            { type: "string", enum: ["post", "event", "video", "group"] },
-            mediaUrl:        { type: "string" },
-            videoThumbnail:  { type: "string" },
-            duration:        { type: "string" },
-            eventDate:       { type: "string" },
+            content: { type: "string", minLength: 1, maxLength: 1000 },
+            type: { type: "string", enum: ["post", "event", "video", "group"] },
+            mediaUrl: { type: "string" },
+            videoThumbnail: { type: "string" },
+            duration: { type: "string" },
+            eventDate: { type: "string" },
           },
           additionalProperties: false,
         },
@@ -129,7 +136,10 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       try {
-        const post = await exploreService.createPost(request.user.uid, request.body);
+        const post = await exploreService.createPost(
+          request.user.uid,
+          request.body,
+        );
         return reply.code(201).send(post);
       } catch (err) {
         return handleError(err, reply);
@@ -146,8 +156,8 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
       schema: {
         params: {
-          type:       "object",
-          required:   ["id"],
+          type: "object",
+          required: ["id"],
           properties: { id: { type: "string" } },
         },
       },
@@ -174,8 +184,8 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
       schema: {
         params: {
-          type:       "object",
-          required:   ["id"],
+          type: "object",
+          required: ["id"],
           properties: { id: { type: "string" } },
         },
       },
@@ -201,8 +211,8 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
       schema: {
         params: {
-          type:       "object",
-          required:   ["id"],
+          type: "object",
+          required: ["id"],
           properties: { id: { type: "string" } },
         },
       },
@@ -229,8 +239,8 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
       schema: {
         params: {
-          type:       "object",
-          required:   ["id"],
+          type: "object",
+          required: ["id"],
           properties: { id: { type: "string" } },
         },
       },
@@ -256,8 +266,8 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
       schema: {
         params: {
-          type:       "object",
-          required:   ["id"],
+          type: "object",
+          required: ["id"],
           properties: { id: { type: "string" } },
         },
       },
@@ -314,7 +324,7 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
             sort: request.query.sort,
             limit: request.query.limit,
             parentId: request.query.parentId,
-          }
+          },
         );
         return reply.send(result);
       } catch (err) {
@@ -326,7 +336,12 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
   // ── POST /explore/posts/:id/comments ──────────────────────────────────────
   app.post<{
     Params: { id: string };
-    Body: { content: string; parentId?: string; imageBase64?: string };
+    Body: {
+      content: string;
+      parentId?: string;
+      replyToCommentId?: string;
+      imageBase64?: string;
+    };
   }>(
     "/explore/posts/:id/comments",
     {
@@ -336,7 +351,9 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
         params: {
           type: "object",
           required: ["id"],
-          properties: { id: { type: "string" } },
+          properties: {
+            id: { type: "string" },
+          },
         },
         body: {
           type: "object",
@@ -344,6 +361,7 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
           properties: {
             content: { type: "string", minLength: 1, maxLength: 2000 },
             parentId: { type: "string" },
+            replyToCommentId: { type: "string" },
             imageBase64: { type: "string" },
           },
           additionalProperties: false,
@@ -358,9 +376,11 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
             postId: request.params.id,
             content: request.body.content,
             parentId: request.body.parentId,
+            replyToCommentId: request.body.replyToCommentId,
             imageBase64: request.body.imageBase64,
-          }
+          },
         );
+
         return reply.code(201).send({ success: true, comment: result });
       } catch (err) {
         return handleError(err, reply);
@@ -388,7 +408,7 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       try {
         const result = await exploreService.toggleCommentLike(
           request.params.id,
-          request.user.uid
+          request.user.uid,
         );
         return reply.send(result);
       } catch (err) {
@@ -471,8 +491,8 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
           type: "object",
           properties: {
             category: { type: "string" },
-            tag:      { type: "string" },
-            limit:    { type: "number", minimum: 1, maximum: 100 },
+            tag: { type: "string" },
+            limit: { type: "number", minimum: 1, maximum: 100 },
           },
           additionalProperties: false,
         },
@@ -482,8 +502,8 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       try {
         const products = await exploreService.getProducts({
           category: request.query.category,
-          tag:      request.query.tag,
-          limit:    request.query.limit,
+          tag: request.query.tag,
+          limit: request.query.limit,
         });
         return reply.send({ products });
       } catch (err) {
@@ -502,7 +522,9 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       try {
-        const products = await exploreService.getRecommendations(request.user.uid);
+        const products = await exploreService.getRecommendations(
+          request.user.uid,
+        );
         return reply.send({ products });
       } catch (err) {
         return handleError(err, reply);
@@ -519,8 +541,8 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
       schema: {
         body: {
-          type:       "object",
-          required:   ["productId"],
+          type: "object",
+          required: ["productId"],
           properties: { productId: { type: "string" } },
           additionalProperties: false,
         },
@@ -548,8 +570,8 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
       schema: {
         params: {
-          type:       "object",
-          required:   ["productId"],
+          type: "object",
+          required: ["productId"],
           properties: { productId: { type: "string" } },
         },
       },
@@ -577,7 +599,9 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       try {
-        const purchasedIds = await exploreService.getPurchases(request.user.uid);
+        const purchasedIds = await exploreService.getPurchases(
+          request.user.uid,
+        );
         return reply.send({ purchasedIds });
       } catch (err) {
         return handleError(err, reply);
