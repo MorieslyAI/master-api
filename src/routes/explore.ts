@@ -417,6 +417,40 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  // ── DELETE /explore/posts/:id ──────────────────────────────────────────────
+  app.delete<{ Params: { id: string } }>(
+    "/explore/posts/:id",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      try {
+        const result = await exploreService.deletePost(
+          request.params.id,
+          request.user.uid,
+        );
+        return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── DELETE /explore/comments/:id ───────────────────────────────────────────
+  app.delete<{ Params: { id: string } }>(
+    "/explore/comments/:id",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      try {
+        const result = await exploreService.deleteComment(
+          request.params.id,
+          request.user.uid,
+        );
+        return reply.send(result);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
   // ══════════════════════════════════════════════════════════════════════════
   // LEADERBOARD
   // ══════════════════════════════════════════════════════════════════════════

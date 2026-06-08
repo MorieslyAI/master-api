@@ -570,6 +570,77 @@ export const exploreService = {
   },
 
   // ══════════════════════════════════════════════════════════════════════════
+  // DELETE POST & COMMENT
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async deletePost(
+    postId: string,
+    userId: string,
+  ): Promise<{ success: boolean }> {
+    const db = getDb();
+    const postRef = db.collection(COL_POSTS).doc(postId);
+    const postSnap = await postRef.get();
+
+    if (!postSnap.exists) throw httpError("Post not found.", 404);
+    if (postSnap.data()?.authorId !== userId)
+      throw httpError("Forbidden. You don't own this post.", 403);
+
+    // Gunakan transaksi agar penghapusan dan pengurangan jumlah post sinkron
+    await db.runTransaction(async (tx) => {
+      tx.delete(postRef);
+
+      const statsRef = db
+        .collection(COL_USERS)
+        .doc(userId)
+        .collection(SUB_SOCIAL)
+        .doc("counts");
+      tx.update(statsRef, { postsCount: FieldValue.increment(-1) });
+    });
+
+    return { success: true };
+  },
+
+  async deleteComment(
+    commentId: string,
+    userId: string,
+  ): Promise<{ success: boolean }> {
+    const db = getDb();
+
+    // Cari komen di sub-collection group
+    const snap = await db
+      .collectionGroup("comments")
+      .where("id", "==", commentId)
+      .limit(1)
+      .get();
+    if (snap.empty) throw httpError("Comment not found.", 404);
+
+    const commentDoc = snap.docs[0];
+    const commentData = commentDoc.data();
+
+    if (commentData.authorId !== userId)
+      throw httpError("Forbidden. You don't own this comment.", 403);
+
+    const postRef = db.collection(COL_POSTS).doc(commentData.postId);
+
+    await db.runTransaction(async (tx) => {
+      tx.delete(commentDoc.ref);
+
+      // Kurangi jumlah komentar di postingan utama
+      tx.update(postRef, { comments: FieldValue.increment(-1) });
+
+      // Jika ini adalah balasan (reply), kurangi jumlah repliesCount di komentar parent-nya
+      if (commentData.parentId) {
+        const parentRef = postRef
+          .collection("comments")
+          .doc(commentData.parentId);
+        tx.update(parentRef, { repliesCount: FieldValue.increment(-1) });
+      }
+    });
+
+    return { success: true };
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
   // LEADERBOARD
   // ══════════════════════════════════════════════════════════════════════════
 
