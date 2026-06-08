@@ -93,22 +93,25 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     "/dashboard/history",
     {
       preHandler: [authenticate],
-      config: { rateLimit: { max: 60, timeWindow: "1 minute" } }
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
       try {
         const item = request.body as any;
-        if (!item.date && item.timestamp) {
-          item.date = new Date(item.timestamp).toISOString().split('T')[0];
+        if (!item.date && item.localDate) {
+          item.date = item.localDate;
+        } else if (!item.date && item.timestamp) {
+          // fallback terakhir saja; idealnya frontend selalu kirim date lokal
+          item.date = new Date(item.timestamp).toISOString().split("T")[0];
         } else if (!item.date) {
-          item.date = new Date().toISOString().split('T')[0];
+          item.date = new Date().toISOString().split("T")[0];
         }
         await dashboardService.saveHistoryItem(request.user.uid, item);
         return reply.send({ success: true, id: item.id });
       } catch (err) {
         return handleError(err, reply);
       }
-    }
+    },
   );
 
   // ── GET /dashboard/metrics (Legacy) ────────────────────────────────────────
