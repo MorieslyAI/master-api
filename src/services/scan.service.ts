@@ -10,16 +10,16 @@ const MANUAL_SCAN_MODEL = "gemini-2.5-flash"; // Or whichever model was used in 
 // ==========================================
 
 const IDENTIFY_SCAN_PROMPT = `
-  Identify the food or drink in this image. 
-  Return ONLY a JSON object with exactly two keys: 
+  Identify the food or drink in this image.
+  Return ONLY a JSON object with exactly two keys:
   - 'name' (string, the common name of the item)
   - 'type' (string, either 'food' or 'drink')
   Do not include any other information.
 `;
 
 const FOOD_SCAN_PROMPT = `
-Analyze this image as a world-class nutritionist and bio-hacker. 
-Identify the food/drink item with EXTREME PRECISION. 
+Analyze this image as a world-class nutritionist and bio-hacker.
+Identify the food/drink item with EXTREME PRECISION.
 If there is a nutrition label or text, perform OCR with 100% ACCURACY. Do not miss any numbers or text.
 If no label, estimate based on visual cues.
 
@@ -52,11 +52,11 @@ Return a JSON object with this EXACT schema (ALL FIELDS REQUIRED):
   "ingredients": ["Ing 1", "Ing 2"],
   "explanation": "Brief explanation of the analysis.",
   "organ_impact": [
-    { 
-      "id": "brain", 
-      "stressLevel": 0, 
-      "message": "Short status (e.g. Dopamine Flood)", 
-      "detail": "Specific medical explanation of how THIS food affects the brain." 
+    {
+      "id": "brain",
+      "stressLevel": 0,
+      "message": "Short status (e.g. Dopamine Flood)",
+      "detail": "Specific medical explanation of how THIS food affects the brain."
     },
     { "id": "skin", "stressLevel": 0, "message": "Status", "detail": "Specific effect on collagen/hydration." },
     { "id": "heart", "stressLevel": 0, "message": "Status", "detail": "Specific effect on blood pressure/inflammation." },
@@ -67,10 +67,10 @@ Return a JSON object with this EXACT schema (ALL FIELDS REQUIRED):
   ]
 }
 
-CRITICAL: 
+CRITICAL:
 - If you see a label, TRUST THE LABEL DATA ABOVE ALL ELSE.
 - For vitamins, extract as many as visible on the label.
-- If no label, YOU MUST ESTIMATE calories, macros, AND VITAMINS based on the food type. 
+- If no label, YOU MUST ESTIMATE calories, macros, AND VITAMINS based on the food type.
 - DO NOT RETURN EMPTY VITAMINS. Estimate at least 4 key vitamins/minerals (e.g. Vit C, Iron, Calcium, Vit A) typical for this food.
 - DO NOT RETURN 0 for calories/macros unless it is water.
 - Be harsh but accurate. DO NOT use exaggerated numbers like 999999 for calories even if the food is unhealthy; provide the most realistic biological estimate.
@@ -133,26 +133,26 @@ RETURN STRICT JSON:
   "calories": number,
   "risk_level": "High" | "Moderate" | "Low",
   "additives": [
-    { 
-      "name": "Chemical Name (e.g. Sodium Polyphosphate, Hydrogenated Oil)", 
-      "role": "Function (e.g. Texture Agent, Trans Fat)", 
-      "risk": "Short Medical Risk (e.g. KIDNEY STRESS, ARTERIAL CLOG, LIVER FAT)" 
+    {
+      "name": "Chemical Name (e.g. Sodium Polyphosphate, Hydrogenated Oil)",
+      "role": "Function (e.g. Texture Agent, Trans Fat)",
+      "risk": "Short Medical Risk (e.g. KIDNEY STRESS, ARTERIAL CLOG, LIVER FAT)"
     },
     { "name": "Chemical Name", "role": "Function", "risk": "Medical Risk" },
     { "name": "Chemical Name", "role": "Function", "risk": "Medical Risk" }
   ],
   "side_effects": [
-    { 
-      "condition": "Medical Alert (e.g. Water Retention Alert, Digestive Stress)", 
-      "severity": "High" | "Moderate" | "Low", 
-      "description": "Specific biological mechanism (e.g. Excessive sodium (820mg) will cause facial puffiness...)", 
-      "color": "blue" 
+    {
+      "condition": "Medical Alert (e.g. Water Retention Alert, Digestive Stress)",
+      "severity": "High" | "Moderate" | "Low",
+      "description": "Specific biological mechanism (e.g. Excessive sodium (820mg) will cause facial puffiness...)",
+      "color": "blue"
     },
-    { 
-      "condition": "Secondary Alert", 
-      "severity": "Moderate", 
-      "description": "Short explanation.", 
-      "color": "pink" 
+    {
+      "condition": "Secondary Alert",
+      "severity": "Moderate",
+      "description": "Short explanation.",
+      "color": "pink"
     }
   ]
 }
@@ -160,14 +160,14 @@ RETURN STRICT JSON:
 
 const RECEIPT_SCAN_PROMPT = `
   You are a Financial Forensics AI specialized in Nutrition.
-  Analyze this receipt image. 
-  
+  Analyze this receipt image.
+
   1. **DETECT CURRENCY:** Look for symbols (Rp, $, €, £, ¥, etc) or country names/addresses on the receipt header. Default to "USD" if strictly ambiguous, but prioritize local context (e.g., "Indomaret" = IDR/Rp).
   2. Perform OCR to extract all items and prices.
   3. Identify which items are "Sugary" or "Highly Processed" (Soda, Candy, Cookies, Sauces, Sweet Bakery).
   4. Identify "Real Food" (Meat, Veg, Fruit, Eggs).
   5. Calculate the TOTAL MONEY SPENT on Sugary items vs Total Bill using the DETECTED CURRENCY.
-  
+
   Return strictly JSON:
   {
     "currency": "string", // e.g. "Rp", "$", "€", "£"
@@ -186,19 +186,19 @@ const VERSUS_SCAN_PROMPT = `
   You have been provided with TWO separate image inputs:
   1. ITEM A (First Image)
   2. ITEM B (Second Image)
-  
+
   Compare them HEAD-TO-HEAD for a person trying to avoid sugar/inflammation.
-  
+
   Return strictly JSON:
   {
     "winner": "A" or "B",
-    "itemA": { 
-       "name": "string", "description": "Short subtitle e.g. 'With Hazelnut Syrup'", "sugar": number, "calories": number, "score": number (0-100), 
-       "pros": ["string"], "cons": ["string"] 
+    "itemA": {
+       "name": "string", "description": "Short subtitle e.g. 'With Hazelnut Syrup'", "sugar": number, "calories": number, "score": number (0-100),
+       "pros": ["string"], "cons": ["string"]
     },
-    "itemB": { 
-       "name": "string", "description": "Short subtitle e.g. 'Single Patty, No Sides'", "sugar": number, "calories": number, "score": number (0-100), 
-       "pros": ["string"], "cons": ["string"] 
+    "itemB": {
+       "name": "string", "description": "Short subtitle e.g. 'Single Patty, No Sides'", "sugar": number, "calories": number, "score": number (0-100),
+       "pros": ["string"], "cons": ["string"]
     },
     "verdict": "A clear, decisive statement on why the winner won."
   }
@@ -208,11 +208,11 @@ const SKIN_SCAN_PROMPT = `
 You are a Dermatology Intelligence Unit.
 Analyze the user's face in the image for signs of "Sugar Face" (Glycation) and Systemic Inflammation.
 
-1. **MAP THE FACE & IDENTIFY ISSUES**: 
+1. **MAP THE FACE & IDENTIFY ISSUES**:
    - Detect 6-8 distinct zones with issues. Look for: Forehead lines, Puffy eyes, Dark circles, Sagging cheeks, Jawline acne, Dullness, Redness.
    - **BE SPECIFIC**: Do NOT give generic results. If the user has clear skin, report "Optimal". If they have acne, report "Inflammation". Match the visual evidence.
    - Use ONLY these zone names (match exactly): "Forehead", "Left Eye", "Right Eye", "Left Cheek", "Right Cheek", "Chin", "Nose", "Upper Lip"
-   
+
 2. **DO NOT estimate coordinates** — coordinates will be computed precisely from face landmark data and injected by the server.
 
 3. **GENERATE A UNIQUE RESCUE PROTOCOL**:
@@ -226,10 +226,10 @@ Return strictly JSON (NO coordinates field needed in faceZones):
   "glycationLevel": "Low" | "Moderate" | "Critical",
   "detectedIssues": ["string", "string"],
   "faceZones": [
-     { 
+     {
        "area": "Forehead" | "Left Eye" | "Right Eye" | "Left Cheek" | "Right Cheek" | "Chin" | "Nose" | "Upper Lip",
-       "condition": "string", 
-       "severity": "Low"|"Medium"|"High", 
+       "condition": "string",
+       "severity": "Low"|"Medium"|"High",
        "treatment": "string",
        "explanation": "Specific medical observation for this exact zone."
      }
@@ -241,9 +241,49 @@ Return strictly JSON (NO coordinates field needed in faceZones):
       "habit": "Specific lifestyle habit.",
       "powerFoods": ["Food 1", "Food 2", "Food 3"],
       "avoidFoods": ["Food 1", "Food 2", "Food 3"],
-      "emergencyFix": "Immediate quick fix (e.g. Ice roller, Green tea bag)." 
+      "emergencyFix": "Immediate quick fix (e.g. Ice roller, Green tea bag)."
   }
 }
+`;
+
+const ADDON_SCAN_PROMPT = `
+You are a precise nutrition calculator.
+
+Analyze the following food/drink add-on text.
+The add-on may be something like:
+- "extra cheese"
+- "2 tbsp sugar"
+- "boba topping"
+- "chocolate syrup"
+- "nasi putih setengah porsi"
+- "sambal manis"
+- "creamer"
+
+Return ONLY strict JSON with this exact schema:
+
+{
+  "name": "string",
+  "sugar": number,
+  "calories": number,
+  "glycemicIndex": number,
+  "type": "food" | "drink",
+  "macros": {
+    "protein": number,
+    "carbs": number,
+    "fat": number,
+    "fiber": number
+  },
+  "verdict": "short nutrition verdict"
+}
+
+Rules:
+- Estimate realistic nutrition values for one typical serving.
+- Do not return null.
+- Do not return markdown.
+- Do not wrap JSON in code fences.
+- sugar must be grams.
+- calories must be kcal.
+- glycemicIndex must be 0-100.
 `;
 
 // ==========================================
@@ -252,14 +292,14 @@ Return strictly JSON (NO coordinates field needed in faceZones):
 
 /** Indices MediaPipe per zona wajah (canonical 478-point model) */
 const ZONE_LANDMARK_INDICES: Record<string, number[]> = {
-  "Forehead":    [10, 338, 297, 332, 284, 251, 389, 109, 67, 103, 54, 21],
-  "Left Eye":    [159, 145, 133, 173, 157, 158, 144, 153, 154, 155],
-  "Right Eye":   [386, 374, 362, 398, 384, 385, 373, 380, 381, 382],
-  "Left Cheek":  [116, 123, 147, 187, 207, 206, 203, 36, 101, 119],
+  Forehead: [10, 338, 297, 332, 284, 251, 389, 109, 67, 103, 54, 21],
+  "Left Eye": [159, 145, 133, 173, 157, 158, 144, 153, 154, 155],
+  "Right Eye": [386, 374, 362, 398, 384, 385, 373, 380, 381, 382],
+  "Left Cheek": [116, 123, 147, 187, 207, 206, 203, 36, 101, 119],
   "Right Cheek": [345, 352, 376, 411, 427, 426, 423, 266, 330, 348],
-  "Chin":        [152, 175, 148, 176, 149, 150, 136, 172, 58, 132],
-  "Nose":        [1, 4, 5, 195, 197, 6, 168, 8],
-  "Upper Lip":   [0, 267, 269, 270, 409, 291, 375, 321, 405, 314],
+  Chin: [152, 175, 148, 176, 149, 150, 136, 172, 58, 132],
+  Nose: [1, 4, 5, 195, 197, 6, 168, 8],
+  "Upper Lip": [0, 267, 269, 270, 409, 291, 375, 321, 405, 314],
 };
 
 /**
@@ -410,15 +450,15 @@ export const executeSkinScan = async (
  */
 function getFallbackCoordinate(area: string): { x: number; y: number } {
   const a = (area ?? "").toLowerCase();
-  if (a.includes("forehead"))                              return { x: 50, y: 22 };
-  if (a.includes("left eye"))                              return { x: 35, y: 38 };
-  if (a.includes("right eye"))                             return { x: 65, y: 38 };
-  if (a.includes("left cheek"))                            return { x: 28, y: 57 };
-  if (a.includes("right cheek"))                           return { x: 72, y: 57 };
-  if (a.includes("nose"))                                  return { x: 50, y: 50 };
-  if (a.includes("upper lip") || a.includes("mouth"))      return { x: 50, y: 65 };
-  if (a.includes("chin") || a.includes("jaw"))             return { x: 50, y: 77 };
-  if (a.includes("neck"))                                  return { x: 50, y: 90 };
+  if (a.includes("forehead")) return { x: 50, y: 22 };
+  if (a.includes("left eye")) return { x: 35, y: 38 };
+  if (a.includes("right eye")) return { x: 65, y: 38 };
+  if (a.includes("left cheek")) return { x: 28, y: 57 };
+  if (a.includes("right cheek")) return { x: 72, y: 57 };
+  if (a.includes("nose")) return { x: 50, y: 50 };
+  if (a.includes("upper lip") || a.includes("mouth")) return { x: 50, y: 65 };
+  if (a.includes("chin") || a.includes("jaw")) return { x: 50, y: 77 };
+  if (a.includes("neck")) return { x: 50, y: 90 };
   return { x: 50, y: 50 };
 }
 
@@ -491,6 +531,36 @@ export const executeVersusScan = async (
       .replace(/\`\`\`json/g, "")
       .replace(/\`\`\`/g, "")
       .trim();
+    return JSON.parse(rawText);
+  }
+
+  throw new Error("Failed to extract text from AI response");
+};
+
+export const executeAddonScan = async (addOnText: string) => {
+  const response = await ai.models.generateContent({
+    model: MANUAL_SCAN_MODEL,
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: `${ADDON_SCAN_PROMPT}\n\nADD-ON ITEM:\n${addOnText}`,
+          },
+        ],
+      },
+    ],
+    config: {
+      responseMimeType: "application/json",
+    },
+  });
+
+  if (response.text) {
+    const rawText = response.text
+      .replace(/\`\`\`json/g, "")
+      .replace(/\`\`\`/g, "")
+      .trim();
+
     return JSON.parse(rawText);
   }
 

@@ -4,6 +4,7 @@ import {
   executeVersusScan,
   executeReanalyzeScan,
   executeSkinScan,
+  executeAddonScan,
 } from "../services/scan.service.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { checkAndIncrementUsage } from "../services/usage.service.js";
@@ -33,11 +34,19 @@ interface SkinScanBody {
   landmarks?: { x: number; y: number; z: number }[];
 }
 
+interface AddonScanBody {
+  scanMode: "addon" | "add-on";
+  text?: string;
+  addOnText?: string;
+  itemName?: string;
+}
+
 type ScanBody =
   | StandardScanBody
   | VersusScanBody
   | ReanalyzeScanBody
-  | SkinScanBody;
+  | SkinScanBody
+  | AddonScanBody;
 
 export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
   // Protect all routes with authentication
@@ -92,6 +101,21 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
           manualType,
           base64Image,
         );
+      } else if (
+        payload.scanMode === "addon" ||
+        payload.scanMode === "add-on"
+      ) {
+        const { text, addOnText, itemName } = payload as AddonScanBody;
+
+        const addonInput = (text || addOnText || itemName || "").trim();
+
+        if (!addonInput) {
+          return reply.status(400).send({
+            error: "addOnText is required for addon mode",
+          });
+        }
+
+        aiResult = await executeAddonScan(addonInput);
       } else {
         const { base64Image, scanMode } = payload as StandardScanBody;
         if (!base64Image) {
