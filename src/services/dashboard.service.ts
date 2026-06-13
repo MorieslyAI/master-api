@@ -7,11 +7,11 @@ export type TimeRange = "30S" | "1M" | "15M" | "1H" | "24H" | "7D" | "30D";
 function timeRangeToMs(range: TimeRange): number {
   const map: Record<TimeRange, number> = {
     "30S": 30 * 1000,
-    "1M":  60 * 1000,
+    "1M": 60 * 1000,
     "15M": 15 * 60 * 1000,
-    "1H":  60 * 60 * 1000,
+    "1H": 60 * 60 * 1000,
     "24H": 24 * 60 * 60 * 1000,
-    "7D":  7  * 24 * 60 * 60 * 1000,
+    "7D": 7 * 24 * 60 * 60 * 1000,
     "30D": 30 * 24 * 60 * 60 * 1000,
   };
   return map[range];
@@ -36,6 +36,7 @@ export interface DashboardQueryStats {
   proteinConsumed: number; // grams consumed today
   drinksCount: number; // number of drink items logged today
   totalItems: number; // total items logged today
+  totalGI: number; // total Glycemic Index from all items
 }
 
 export interface MacroTargets {
@@ -233,7 +234,6 @@ function computeMacroTargets(p: StoredProfile): MacroTargets {
 }
 
 // ─── Health Metrics Calculator ────────────────────────────────────────────────
-// Replaces Math.random() with data-driven scoring.
 
 function computeHealthMetrics(
   p: StoredProfile,
@@ -274,13 +274,35 @@ function computeMetabolicScore(
   if (stats.totalItems <= 0) return 0;
 
   if (!p) {
-    return Math.round(Math.min(100, Math.max(0, 100 - stats.sugarConsumed * 2)));
+    return Math.round(
+      Math.min(100, Math.max(0, 100 - stats.sugarConsumed * 2)),
+    );
   }
 
   const healthMetrics = computeHealthMetrics(p, macros, stats);
-  const glucoseControl = 100 - Math.min(100, (stats.sugarConsumed / Math.max(1, p.sugarLimit)) * 100);
-  const calorieControl = 100 - Math.min(100, (stats.caloriesConsumed / Math.max(1, macros.calories)) * 100);
-  const proteinAdequacy = Math.min(100, (stats.proteinConsumed / Math.max(1, macros.protein)) * 100);
+
+  // Hitung base glucose control dari total sugar vs limit
+  let glucoseControl =
+    100 -
+    Math.min(100, (stats.sugarConsumed / Math.max(1, p.sugarLimit)) * 100);
+
+  // IMPLEMENTASI LAMA: Hitung rata-rata GI & Terapkan penalti jika GI > 55
+  const avgGI = stats.totalItems > 0 ? stats.totalGI / stats.totalItems : 0;
+  if (avgGI > 55) {
+    const giPenalty = (avgGI - 55) * 0.5;
+    glucoseControl = Math.max(0, glucoseControl - giPenalty);
+  }
+
+  const calorieControl =
+    100 -
+    Math.min(
+      100,
+      (stats.caloriesConsumed / Math.max(1, macros.calories)) * 100,
+    );
+  const proteinAdequacy = Math.min(
+    100,
+    (stats.proteinConsumed / Math.max(1, macros.protein)) * 100,
+  );
   const hydrationAdequacy = Math.min(100, (stats.drinksCount / 4) * 100);
 
   const score =
@@ -294,7 +316,6 @@ function computeMetabolicScore(
 }
 
 // ─── Daily Directive Generator ────────────────────────────────────────────────
-// Returns personalised recommendations based on profile + time of day.
 
 function computeDailyDirective(
   p: StoredProfile,
@@ -377,7 +398,6 @@ function computeDailyDirective(
 }
 
 // ─── Metabolic Insight Generator ─────────────────────────────────────────────
-// Replaces hardcoded ad content with data-driven insight.
 
 function computeMetabolicInsight(
   p: StoredProfile,
@@ -451,7 +471,6 @@ export const dashboardService = {
     if (!p) throw httpError("Profil belum dikalibrasi.", 422);
 
     // 2. Ambil Riwayat Harian (Log Makanan/Minuman/Olahraga)
-    // Asumsi: collection `logs` sebagai subcollection dari user: users/{userId}/logs
     const logsSnapshot = await db
       .collection(COL_USERS)
       .doc(userId)
@@ -468,6 +487,7 @@ export const dashboardService = {
     let drinksCount = 0;
     let caloriesBurned = 0;
     let nutritionItems = 0;
+    let totalGI = 0;
     const historyItems: any[] = [];
 
     logsSnapshot.forEach((docLog) => {
@@ -481,6 +501,8 @@ export const dashboardService = {
         fatConsumed += Number(log.fat) || 0;
         sugarConsumed += Number(log.sugar) || Number(log.sugarg) || 0;
         fiberConsumed += Number(log.fiber) || 0;
+        totalGI += Number(log.glycemicIndex) || 0; // Tracking total GI
+
         if (log.type === "drink") drinksCount += 1;
         nutritionItems += 1;
       } else if (log.type === "workout") {
@@ -494,20 +516,20 @@ export const dashboardService = {
       proteinConsumed,
       drinksCount,
       totalItems: nutritionItems,
+      totalGI,
     };
 
-    // 3. Kalkulasi Metrics (Health, AI Insights, dll) sama seperti `getMetrics` sebelumnya
+    // 3. Kalkulasi Metrics (Health, AI Insights, dll)
     const macroTargets = computeMacroTargets(p);
     const healthMetrics = computeHealthMetrics(p, macroTargets, stats);
     const metabolicScore = computeMetabolicScore(p, macroTargets, stats);
     const metabolicInsight = computeMetabolicInsight(p, macroTargets, stats);
     const dailyDirective = computeDailyDirective(p, macroTargets, stats);
 
-    // 4. Bangun Format BFF (Backend-For-Frontend) sesuai kesepakatan struktur
+    // 4. Bangun Format BFF (Backend-For-Frontend)
     return {
       insights: {
         highlights: [
-          // Hardcoded dummy agent sementara hingga fitur Agent dinamis dibuat
           {
             id: "daily_directive",
             type: "directive",
@@ -569,7 +591,9 @@ export const dashboardService = {
   // ── GET /dashboard/history logic ────────────────────────────────────────────
   async saveHistoryItem(userId: string, item: any): Promise<void> {
     const db = getDb();
-    if (!item.id) { throw new Error("History item must have an id"); }
+    if (!item.id) {
+      throw new Error("History item must have an id");
+    }
     await db
       .collection(COL_USERS)
       .doc(userId)
@@ -592,7 +616,6 @@ export const dashboardService = {
       history.push({ id: docLog.id, ...docLog.data() });
     });
 
-    // Sort in memory to avoid requiring a composite index in Firestore
     history.sort((a, b) => {
       const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
       const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
@@ -630,25 +653,29 @@ export const dashboardService = {
   },
 
   // ── GET /dashboard/range-metrics logic ─────────────────────────────────────
-  // Menghitung metabolicTrend dan energyTrend berdasarkan log dalam rentang waktu.
   async getRangeMetrics(
     userId: string,
     range: TimeRange,
-  ): Promise<{ timeRange: TimeRange; metabolicScore: number; metabolicTrend: number; energyTrend: number }> {
+  ): Promise<{
+    timeRange: TimeRange;
+    metabolicScore: number;
+    metabolicTrend: number;
+    energyTrend: number;
+  }> {
     const db = getDb();
-    
-    // Fetch profile for accurate baseline targets
+
     const doc = await db.collection(COL_USERS).doc(userId).get();
     const data = doc.data() || {};
     const p = data["profile"] as StoredProfile | undefined;
-    const macroTargets = p ? computeMacroTargets(p) : { calories: 2000, protein: 120, carbs: 250, fat: 65, fiber: 25 };
+    const macroTargets = p
+      ? computeMacroTargets(p)
+      : { calories: 2000, protein: 120, carbs: 250, fat: 65, fiber: 25 };
 
     const rangeMs = timeRangeToMs(range);
     const nowMs = Date.now();
     const currentStartMs = nowMs - rangeMs;
     const previousStartMs = currentStartMs - rangeMs;
 
-    // Ambil log sejak awal periode pembanding agar trend bisa dihitung sebagai delta nyata.
     const sinceDate = new Date(previousStartMs).toISOString().split("T")[0];
     const snapshot = await db
       .collection(COL_USERS)
@@ -663,19 +690,27 @@ export const dashboardService = {
       totalProtein: 0,
       drinksCount: 0,
       totalItems: 0,
+      totalGI: 0,
       uniqueDays: new Set<string>(),
     });
 
     const current = createBucket();
     const previous = createBucket();
 
-    const addLog = (bucket: ReturnType<typeof createBucket>, log: FirebaseFirestore.DocumentData, timestampMs: number) => {
+    const addLog = (
+      bucket: ReturnType<typeof createBucket>,
+      log: FirebaseFirestore.DocumentData,
+      timestampMs: number,
+    ) => {
       bucket.totalCalories += Number(log.calories) || 0;
       bucket.totalSugar += Number(log.sugar) || Number(log.sugarg) || 0;
       bucket.totalProtein += Number(log.protein) || 0;
+      bucket.totalGI += Number(log.glycemicIndex) || 0;
       if (log.type === "drink") bucket.drinksCount += 1;
       bucket.totalItems += 1;
-      bucket.uniqueDays.add(log.date || new Date(timestampMs).toISOString().split("T")[0]);
+      bucket.uniqueDays.add(
+        log.date || new Date(timestampMs).toISOString().split("T")[0],
+      );
     };
 
     snapshot.forEach((docLog) => {
@@ -688,7 +723,12 @@ export const dashboardService = {
           ? new Date(`${log.date}T00:00:00.000Z`).getTime()
           : 0;
 
-      if (!Number.isFinite(timestampMs) || timestampMs < previousStartMs || timestampMs > nowMs) return;
+      if (
+        !Number.isFinite(timestampMs) ||
+        timestampMs < previousStartMs ||
+        timestampMs > nowMs
+      )
+        return;
 
       if (timestampMs >= currentStartMs) {
         addLog(current, log, timestampMs);
@@ -697,7 +737,9 @@ export const dashboardService = {
       }
     });
 
-    const toStats = (bucket: ReturnType<typeof createBucket>): DashboardQueryStats => {
+    const toStats = (
+      bucket: ReturnType<typeof createBucket>,
+    ): DashboardQueryStats => {
       const daysCount = Math.max(1, bucket.uniqueDays.size);
 
       return {
@@ -705,28 +747,46 @@ export const dashboardService = {
         caloriesConsumed: bucket.totalCalories / daysCount,
         proteinConsumed: bucket.totalProtein / daysCount,
         drinksCount: bucket.drinksCount / daysCount,
-        totalItems: bucket.totalItems,
+        totalItems: bucket.totalItems, // raw sum over range
+        totalGI: bucket.totalGI, // raw sum over range
       };
     };
 
     const currentStats = toStats(current);
     const previousStats = toStats(previous);
     const metabolicScore = computeMetabolicScore(p, macroTargets, currentStats);
-    const previousMetabolicScore = computeMetabolicScore(p, macroTargets, previousStats);
+    const previousMetabolicScore = computeMetabolicScore(
+      p,
+      macroTargets,
+      previousStats,
+    );
 
-    const metabolicTrend = previous.totalItems === 0 ? 0 : Math.round(metabolicScore - previousMetabolicScore);
+    const metabolicTrend =
+      previous.totalItems === 0
+        ? 0
+        : Math.round(metabolicScore - previousMetabolicScore);
 
-    const currentEnergy = Math.min(100, (currentStats.proteinConsumed / Math.max(1, macroTargets.protein)) * 100);
-    const previousEnergy = Math.min(100, (previousStats.proteinConsumed / Math.max(1, macroTargets.protein)) * 100);
-    const energyTrend = previous.totalItems === 0 ? 0 : Math.round(currentEnergy - previousEnergy);
+    const currentEnergy = Math.min(
+      100,
+      (currentStats.proteinConsumed / Math.max(1, macroTargets.protein)) * 100,
+    );
+    const previousEnergy = Math.min(
+      100,
+      (previousStats.proteinConsumed / Math.max(1, macroTargets.protein)) * 100,
+    );
+    const energyTrend =
+      previous.totalItems === 0
+        ? 0
+        : Math.round(currentEnergy - previousEnergy);
 
     return { timeRange: range, metabolicScore, metabolicTrend, energyTrend };
   },
 
   // ── GET /dashboard/status logic ─────────────────────────────────────────────
-  // Mengembalikan data lengkap untuk halaman Agent Status:
-  // profil, XP, performance score, diet adherence, alerts aktif, mission trajectory.
-  async getStatusData(userId: string, dateStr: string): Promise<UserStatusResponse> {
+  async getStatusData(
+    userId: string,
+    dateStr: string,
+  ): Promise<UserStatusResponse> {
     const db = getDb();
     const doc = await db.collection(COL_USERS).doc(userId).get();
     if (!doc.exists) throw httpError("User tidak ditemukan.", 404);
@@ -734,7 +794,6 @@ export const dashboardService = {
     const data = doc.data() as Record<string, any>;
     const p = data["profile"] as StoredProfile | undefined;
 
-    // Ambil log hari ini untuk menghitung stats harian
     const logsSnapshot = await db
       .collection(COL_USERS)
       .doc(userId)
@@ -746,7 +805,11 @@ export const dashboardService = {
     let sugarConsumed = 0;
     let totalSugarAllTime = 0;
     let totalItems = 0;
-    const activeAlerts: Array<{ type: "danger" | "warning" | "info"; title: string; message: string }> = [];
+    const activeAlerts: Array<{
+      type: "danger" | "warning" | "info";
+      title: string;
+      message: string;
+    }> = [];
 
     logsSnapshot.forEach((docLog) => {
       const log = docLog.data();
@@ -759,9 +822,10 @@ export const dashboardService = {
     });
 
     const sugarLimit = p?.sugarLimit ?? 25;
-    const macroTargets = p ? computeMacroTargets(p) : { calories: 2000, protein: 120, carbs: 250, fat: 65, fiber: 25 };
+    const macroTargets = p
+      ? computeMacroTargets(p)
+      : { calories: 2000, protein: 120, carbs: 250, fat: 65, fiber: 25 };
 
-    // Hitung alerts aktif
     const sugarDebt = Math.max(0, sugarConsumed - sugarLimit);
     if (sugarDebt > 0) {
       activeAlerts.push({
@@ -771,7 +835,8 @@ export const dashboardService = {
       });
     }
 
-    const medicalConditions: string[] = p?.medicalConditions ?? (data["medicalConditions"] ?? []);
+    const medicalConditions: string[] =
+      p?.medicalConditions ?? data["medicalConditions"] ?? [];
     if (medicalConditions.length > 0) {
       activeAlerts.push({
         type: "info",
@@ -780,23 +845,27 @@ export const dashboardService = {
       });
     }
 
-    // Performance score: 0–100
     const level = data["level"] ?? 1;
-    const avgSugar = totalItems > 0 ? sugarConsumed / Math.max(totalItems, 1) : 0;
-    const performanceScore = Math.min(100, Math.max(0, Math.round(100 - (avgSugar * 2) + (level * 5))));
+    const avgSugar =
+      totalItems > 0 ? sugarConsumed / Math.max(totalItems, 1) : 0;
+    const performanceScore = Math.min(
+      100,
+      Math.max(0, Math.round(100 - avgSugar * 2 + level * 5)),
+    );
 
-    // Diet adherence: perbandingan kalori aktual vs target (0–100%)
-    const dietAdherence = macroTargets.calories > 0
-      ? Math.min(100, Math.round((caloriesConsumed / macroTargets.calories) * 100))
-      : 0;
+    const dietAdherence =
+      macroTargets.calories > 0
+        ? Math.min(
+            100,
+            Math.round((caloriesConsumed / macroTargets.calories) * 100),
+          )
+        : 0;
 
-    // Next evaluation date: 7 hari dari sekarang
     const nextEval = new Date();
     nextEval.setDate(nextEval.getDate() + 7);
     const nextEvalStr = `${nextEval.getDate()} ${nextEval.toLocaleString("id-ID", { month: "long" })} ${nextEval.getFullYear()}`;
 
     return {
-      // Profile
       name: data["displayName"] ?? "Agent",
       rankTitle: data["rankTitle"] ?? "Rookie Agent",
       level,
@@ -804,15 +873,9 @@ export const dashboardService = {
       nextLevelXp: data["nextLevelXp"] ?? 100,
       streak: data["streak"] ?? 0,
       weight: p?.weight ?? null,
-
-      // Performance
       performanceScore,
       dietAdherence,
-
-      // Alerts
       activeAlerts,
-
-      // Mission trajectory
       targetCalories: macroTargets.calories,
       caloriesConsumedToday: Math.round(caloriesConsumed),
       nextEvaluation: nextEvalStr,
