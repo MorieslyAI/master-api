@@ -139,6 +139,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
             proteinConsumed: { type: "number", minimum: 0 },
             drinksCount: { type: "number", minimum: 0 },
             totalItems: { type: "number", minimum: 0 },
+            totalGI: { type: "number", minimum: 0 },
           },
           additionalProperties: false,
         },
@@ -152,6 +153,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
           proteinConsumed: request.query.proteinConsumed ?? 0,
           drinksCount: request.query.drinksCount ?? 0,
           totalItems: request.query.totalItems ?? 0,
+          totalGI: request.query.totalGI ?? 0,
         };
 
         const metrics = await dashboardService.getMetrics(
