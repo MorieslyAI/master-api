@@ -228,7 +228,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
       try {
         const { planId, mealIndex, currentMeal, dietTarget } = request.body;
 
-        const newMeal = await dietService.swapMeal({ currentMeal, dietTarget });
+        const newMeal = await dietService.swapMeal({ currentMeal, dietTarget }, request.user.uid);
 
         // Fetch the latest plan and update meals
         const active = await dietService.getActivePlans(request.user.uid);
@@ -487,7 +487,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
         const { mealIndex, currentMeal, target } = request.body;
         const planId = request.params.planId;
 
-        const newMeal = await dietService.swapMeal({ currentMeal, dietTarget: target });
+        const newMeal = await dietService.swapMeal({ currentMeal, dietTarget: target }, request.user.uid);
 
         const active = await dietService.getActivePlans(request.user.uid);
         const dailyPlan = active.daily;

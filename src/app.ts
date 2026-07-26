@@ -1,10 +1,11 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyBaseLogger } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import cookie from "@fastify/cookie";
 import websocket from "@fastify/websocket";
 import { env } from "./config/env.js";
+import { logger } from "./lib/logger.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { userRoutes } from "./routes/user.js";
@@ -20,19 +21,11 @@ import { groupChatRoutes } from "./routes/group-chat.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: {
-      level: env.NODE_ENV === "production" ? "info" : "debug",
-      ...(env.NODE_ENV !== "production" && {
-        transport: {
-          target: "pino-pretty",
-          options: {
-            colorize: true,
-            translateTime: "SYS:HH:MM:ss",
-            ignore: "pid,hostname",
-          },
-        },
-      }),
-    },
+    // Cast: Fastify infers an overly-specific pino `Logger<...>` type param from a
+    // live instance, which doesn't structurally match the default `FastifyBaseLogger`
+    // used in this function's `Promise<FastifyInstance>` return type. Runtime behavior
+    // is unaffected — it's still the same shared `logger` instance from lib/logger.ts.
+    logger: logger as unknown as FastifyBaseLogger,
     bodyLimit: 10485760,
     trustProxy: true,
   });

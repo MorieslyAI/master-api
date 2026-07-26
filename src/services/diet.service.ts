@@ -1,7 +1,6 @@
-import { GoogleGenAI } from "@google/genai";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase.js";
-import { env } from "../config/env.js";
+import { generateContentTracked } from "../lib/gemini.js";
 
 // ─── Firestore Collection ─────────────────────────────────────────────────────
 const COL_USERS = "users";
@@ -102,7 +101,6 @@ export interface SwapMealInput {
 
 // ─── AI Setup ─────────────────────────────────────────────────────────────────
 
-const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 const DIET_MODEL = "gemini-2.5-flash";
 
 // ─── Date Helpers ─────────────────────────────────────────────────────────────
@@ -137,12 +135,19 @@ function httpError(message: string, statusCode: number): Error {
 class DietService {
   // ── AI Helper ───────────────────────────────────────────────────────────────
 
-  private async generateJSON<T>(prompt: string): Promise<T> {
-    const response = await ai.models.generateContent({
-      model: DIET_MODEL,
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { responseMimeType: "application/json" },
-    });
+  private async generateJSON<T>(
+    prompt: string,
+    feature: string,
+    userId: string,
+  ): Promise<T> {
+    const response = await generateContentTracked(
+      {
+        model: DIET_MODEL,
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { responseMimeType: "application/json" },
+      },
+      { feature, userId },
+    );
 
     const text = response.text ?? "";
 
@@ -229,7 +234,7 @@ class DietService {
       );
     }
 
-    const plan = await this.generateDailyPlan(input);
+    const plan = await this.generateDailyPlan(input, userId);
     const now = new Date();
     const docRef = this.plansCol(userId).doc();
 
@@ -268,7 +273,7 @@ class DietService {
       );
     }
 
-    const plan = await this.generateWeeklyPlan(input);
+    const plan = await this.generateWeeklyPlan(input, userId);
     const now = new Date();
     const docRef = this.plansCol(userId).doc();
 
@@ -412,7 +417,7 @@ class DietService {
 
   // ── AI Generation (internal, no Firestore) ───────────────────────────────────
 
-  async generateDailyPlan(input: GenerateDailyPlanInput): Promise<DietPlan> {
+  async generateDailyPlan(input: GenerateDailyPlanInput, userId: string): Promise<DietPlan> {
     const prompt = `
       Act as an elite tactical nutritionist AI. Generate a strict 1-day diet plan.
       
@@ -449,10 +454,10 @@ class DietService {
       }
     `;
 
-    return this.generateJSON<DietPlan>(prompt);
+    return this.generateJSON<DietPlan>(prompt, "diet.daily", userId);
   }
 
-  async generateWeeklyPlan(input: GenerateWeeklyPlanInput): Promise<WeeklyPlan> {
+  async generateWeeklyPlan(input: GenerateWeeklyPlanInput, userId: string): Promise<WeeklyPlan> {
     const prompt = `
       Generate a tactical 7-day meal prep plan (Monday to Sunday).
       USER: ${input.userName}, ${input.userAge}yo, ${input.userWeight}kg.
@@ -492,10 +497,10 @@ class DietService {
       }
     `;
 
-    return this.generateJSON<WeeklyPlan>(prompt);
+    return this.generateJSON<WeeklyPlan>(prompt, "diet.weekly", userId);
   }
 
-  async swapMeal(input: SwapMealInput): Promise<MealItem> {
+  async swapMeal(input: SwapMealInput, userId: string): Promise<MealItem> {
     const prompt = `
       The user wants to SWAP this meal: "${input.currentMeal.menuName}".
       They dislike it or can't make it.
@@ -520,7 +525,7 @@ class DietService {
       }
     `;
 
-    return this.generateJSON<MealItem>(prompt);
+    return this.generateJSON<MealItem>(prompt, "diet.swap", userId);
   }
 }
 

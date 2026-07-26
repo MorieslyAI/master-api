@@ -1,7 +1,9 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { GoogleGenAI } from "@google/genai";
 import { getDb } from "../lib/firebase.js";
-import { env } from "../config/env.js";
+import {
+  generateContentTracked,
+  generateContentStreamTracked,
+} from "../lib/gemini.js";
 
 // ─── Firestore Schema ─────────────────────────────────────────────────────────
 //
@@ -151,10 +153,9 @@ export const chatService = {
     userProfile: { name: string; age: number; weight: number },
     history: Array<{ role: "user" | "model"; text: string }>,
     userMessage: string,
+    userId: string,
     imageBase64?: string,
   ): AsyncGenerator<string> {
-    const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
-
     const systemInstruction = [
       `You are "Dr. Moriesly", a gentle, polite, and caring health consultant.`,
       `USER INFO: ${userProfile.name}, ${userProfile.age}yo, ${userProfile.weight}kg.`,
@@ -187,11 +188,14 @@ export const chatService = {
       { role: "user", parts: currentParts },
     ];
 
-    const stream = await ai.models.generateContentStream({
-      model:    "gemini-2.5-flash",
-      contents: fullContents,
-      config:   { systemInstruction, temperature: 0.7 },
-    });
+    const stream = generateContentStreamTracked(
+      {
+        model:    "gemini-2.5-flash",
+        contents: fullContents,
+        config:   { systemInstruction, temperature: 0.7 },
+      },
+      { feature: "chat.stream", userId },
+    );
 
     for await (const chunk of stream) {
       const token = chunk.text;
@@ -202,13 +206,13 @@ export const chatService = {
   // ── Generate AI summary (helper) ────────────────────────────────────────────
   async generateSessionSummary(
     transcript: Array<{ role: string; text: string }>,
+    userId?: string,
   ): Promise<{ summary: string; advice: string }> {
     let summary = "Session completed.";
     let advice  = "Keep up the great work!";
 
     if (transcript.length > 1) {
       try {
-        const ai            = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
         const transcriptTxt = transcript
           .map((m) => `${m.role.toUpperCase()}: ${m.text}`)
           .join("\n");
@@ -222,11 +226,14 @@ export const chatService = {
           TRANSCRIPT: ${transcriptTxt}
         `;
 
-        const response = await ai.models.generateContent({
-          model:    "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          config:   { responseMimeType: "application/json" },
-        });
+        const response = await generateContentTracked(
+          {
+            model:    "gemini-2.5-flash",
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            config:   { responseMimeType: "application/json" },
+          },
+          { feature: "chat.summary", userId },
+        );
 
         if (response.text) {
           const raw  = response.text.replace(/```json/g, "").replace(/```/g, "").trim();
@@ -248,8 +255,8 @@ export const chatService = {
     sessionId: string,
     transcript: Array<{ role: string; text: string }>,
   ): Promise<{ summary: string; advice: string }> {
-    const { summary, advice } = await this.generateSessionSummary(transcript);
-    
+    const { summary, advice } = await this.generateSessionSummary(transcript, userId);
+
     const db = getDb();
     const now = new Date().toISOString();
     const sessionRef = db
@@ -294,7 +301,7 @@ export const chatService = {
     sessionId: string,
     transcript: Array<{ role: string; text: string }>,
   ): Promise<{ summary: string; advice: string }> {
-    const { summary, advice } = await this.generateSessionSummary(transcript);
+    const { summary, advice } = await this.generateSessionSummary(transcript, userId);
 
     await getDb()
       .collection(COL_USERS)

@@ -1,8 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
-import { env } from "../config/env.js";
+import { generateContentTracked } from "../lib/gemini.js";
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 const MANUAL_SCAN_MODEL = "gemini-2.5-flash"; // Or whichever model was used in frontend
 
 // ==========================================
@@ -350,6 +347,7 @@ function buildZoneCoordinateMap(
 export const executeStandardScan = async (
   base64Image: string,
   scanMode: "food" | "label" | "qr" | "receipt",
+  userId: string,
 ) => {
   let userPrompt = "";
   if (scanMode === "food") userPrompt = FOOD_SCAN_PROMPT;
@@ -357,21 +355,24 @@ export const executeStandardScan = async (
   else if (scanMode === "qr") userPrompt = QR_SCAN_PROMPT;
   else if (scanMode === "receipt") userPrompt = RECEIPT_SCAN_PROMPT;
 
-  const response = await ai.models.generateContent({
-    model: MANUAL_SCAN_MODEL,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { inlineData: { mimeType: "image/jpeg", data: base64Image } },
-          { text: userPrompt },
-        ],
+  const response = await generateContentTracked(
+    {
+      model: MANUAL_SCAN_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType: "image/jpeg", data: base64Image } },
+            { text: userPrompt },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
       },
-    ],
-    config: {
-      responseMimeType: "application/json",
     },
-  });
+    { feature: `scan.${scanMode}`, userId },
+  );
 
   if (response.text) {
     const rawText = response.text
@@ -396,21 +397,25 @@ export const executeStandardScan = async (
  */
 export const executeSkinScan = async (
   base64Image: string,
+  userId: string,
   landmarks?: { x: number; y: number; z: number }[],
 ) => {
-  const response = await ai.models.generateContent({
-    model: MANUAL_SCAN_MODEL,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { inlineData: { mimeType: "image/jpeg", data: base64Image } },
-          { text: SKIN_SCAN_PROMPT },
-        ],
-      },
-    ],
-    config: { responseMimeType: "application/json" },
-  });
+  const response = await generateContentTracked(
+    {
+      model: MANUAL_SCAN_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType: "image/jpeg", data: base64Image } },
+            { text: SKIN_SCAN_PROMPT },
+          ],
+        },
+      ],
+      config: { responseMimeType: "application/json" },
+    },
+    { feature: "scan.skin", userId },
+  );
 
   if (!response.text) {
     throw new Error("Failed to extract text from AI response");
@@ -469,6 +474,7 @@ function getFallbackCoordinate(area: string): { x: number; y: number } {
 export const executeReanalyzeScan = async (
   manualName: string,
   manualType: "food" | "drink",
+  userId: string,
   base64Image?: string,
 ) => {
   const userHintPrompt =
@@ -483,11 +489,14 @@ export const executeReanalyzeScan = async (
   parts.push({ text: userHintPrompt });
   parts.push({ text: FOOD_SCAN_PROMPT });
 
-  const response = await ai.models.generateContent({
-    model: MANUAL_SCAN_MODEL,
-    contents: [{ role: "user", parts }],
-    config: { responseMimeType: "application/json" },
-  });
+  const response = await generateContentTracked(
+    {
+      model: MANUAL_SCAN_MODEL,
+      contents: [{ role: "user", parts }],
+      config: { responseMimeType: "application/json" },
+    },
+    { feature: "scan.reanalyze", userId },
+  );
 
   if (response.text) {
     const rawText = response.text
@@ -506,6 +515,7 @@ export const executeReanalyzeScan = async (
 export const executeVersusScan = async (
   base64ImageA: string,
   base64ImageB: string,
+  userId: string,
 ) => {
   const contents = [
     {
@@ -520,11 +530,14 @@ export const executeVersusScan = async (
     },
   ];
 
-  const response = await ai.models.generateContent({
-    model: MANUAL_SCAN_MODEL,
-    contents,
-    config: { responseMimeType: "application/json" },
-  });
+  const response = await generateContentTracked(
+    {
+      model: MANUAL_SCAN_MODEL,
+      contents,
+      config: { responseMimeType: "application/json" },
+    },
+    { feature: "scan.versus", userId },
+  );
 
   if (response.text) {
     const rawText = response.text
@@ -537,23 +550,26 @@ export const executeVersusScan = async (
   throw new Error("Failed to extract text from AI response");
 };
 
-export const executeAddonScan = async (addOnText: string) => {
-  const response = await ai.models.generateContent({
-    model: MANUAL_SCAN_MODEL,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          {
-            text: `${ADDON_SCAN_PROMPT}\n\nADD-ON ITEM:\n${addOnText}`,
-          },
-        ],
+export const executeAddonScan = async (addOnText: string, userId: string) => {
+  const response = await generateContentTracked(
+    {
+      model: MANUAL_SCAN_MODEL,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: `${ADDON_SCAN_PROMPT}\n\nADD-ON ITEM:\n${addOnText}`,
+            },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
       },
-    ],
-    config: {
-      responseMimeType: "application/json",
     },
-  });
+    { feature: "scan.addon", userId },
+  );
 
   if (response.text) {
     const rawText = response.text

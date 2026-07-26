@@ -1,14 +1,20 @@
 import { randomUUID } from "crypto";
 import { PassThrough } from "stream";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { GoogleGenAI, type LiveServerMessage, Modality } from "@google/genai";
+import { type LiveServerMessage, Modality } from "@google/genai";
 import type { RawData, WebSocket } from "ws";
 import { chatService, type SessionType } from "../services/chat.service.js";
 import { videoCallService } from "../services/video-call.service.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { verifySocketToken } from "../lib/jwt.js";
-import { env } from "../config/env.js";
 import { checkAndIncrementUsage } from "../services/usage.service.js";
+import {
+  geminiClient,
+  recordGeminiUsage,
+  type UsageMetadataLike,
+} from "../lib/gemini.js";
+
+const LIVE_MODEL = "gemini-2.5-flash-native-audio-latest";
 
 // ─── Route Error Handler ──────────────────────────────────────────────────────
 
@@ -51,8 +57,6 @@ function safeSend(socket: WebSocket, payload: Record<string, unknown>): void {
 // ─── Chat Routes ──────────────────────────────────────────────────────────────
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
-  const geminiLive = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
-
   // ── GET /chat/video/quota ─────────────────────────────────────────────────
   // Returns today's quota + active session status for the authenticated user.
   app.get(
@@ -226,6 +230,19 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     let hasInitializedLive = false;
     let liveSessionPromise: Promise<any> | null = null;
 
+    // ── Token usage tracking for this Live session ──────────────────────────
+    let lastLiveUsage: UsageMetadataLike | undefined;
+    let liveUsageRecorded = false;
+
+    function recordLiveUsageOnce(): void {
+      if (liveUsageRecorded) return;
+      liveUsageRecorded = true;
+      recordGeminiUsage(
+        { feature: "chat.live", userId, sessionId, model: LIVE_MODEL },
+        lastLiveUsage,
+      );
+    }
+
     const policyInterval = setInterval(async () => {
       if (!isSessionValidated || isClosed) return;
 
@@ -316,8 +333,8 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
         }
 
         hasInitializedLive = true;
-        liveSessionPromise = geminiLive.live.connect({
-          model: "gemini-2.5-flash-native-audio-latest",
+        liveSessionPromise = geminiClient.live.connect({
+          model: LIVE_MODEL,
           config: {
             systemInstruction: {
               parts: [{ text: message.systemInstruction ?? "" }],
@@ -334,6 +351,18 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
               safeSend(ws, { type: "open" });
             },
             onmessage: (serverMessage: LiveServerMessage) => {
+              if (serverMessage.usageMetadata) {
+                const u = serverMessage.usageMetadata;
+                lastLiveUsage = {
+                  promptTokenCount: u.promptTokenCount,
+                  // Live API names this field differently from generateContent's usageMetadata.
+                  candidatesTokenCount: u.responseTokenCount,
+                  totalTokenCount: u.totalTokenCount,
+                  thoughtsTokenCount: u.thoughtsTokenCount,
+                  cachedContentTokenCount: u.cachedContentTokenCount,
+                };
+              }
+
               if (serverMessage.serverContent?.outputTranscription?.text) {
                 safeSend(ws, {
                   type: "transcript",
@@ -449,6 +478,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       if (isClosed) return;
       isClosed = true;
       clearInterval(policyInterval);
+      recordLiveUsageOnce();
 
       if (liveSessionPromise) {
         void liveSessionPromise
@@ -469,6 +499,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       if (isClosed) return;
       isClosed = true;
       clearInterval(policyInterval);
+      recordLiveUsageOnce();
       void videoCallService
         .endSession(userId, sessionId, "socket_error")
         .catch(() => {});
@@ -638,6 +669,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
           userProfile,
           history,
           message,
+          userId,
           imageBase64,
         );
 

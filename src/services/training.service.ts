@@ -1,7 +1,6 @@
-import { GoogleGenAI } from "@google/genai";
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase.js";
-import { env } from "../config/env.js";
+import { generateContentTracked } from "../lib/gemini.js";
 
 // ─── Firestore Collection ─────────────────────────────────────────────────────
 const COL_USERS = "users";
@@ -54,7 +53,6 @@ export interface GenerateTrainingInput {
 
 // ─── AI Setup ─────────────────────────────────────────────────────────────────
 
-const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 const TRAINING_MODEL = "gemini-2.5-flash";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,7 +108,10 @@ class TrainingService {
 
   // ── AI Generation ────────────────────────────────────────────────────────────
 
-  private async generatePlan(input: GenerateTrainingInput): Promise<OperationPlan> {
+  private async generatePlan(
+    input: GenerateTrainingInput,
+    userId: string,
+  ): Promise<OperationPlan> {
     const constraints =
       input.inputMode === "manual"
         ? input.customParams ?? "None"
@@ -155,11 +156,14 @@ class TrainingService {
       }
     `;
 
-    const response = await ai.models.generateContent({
-      model: TRAINING_MODEL,
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { responseMimeType: "application/json" },
-    });
+    const response = await generateContentTracked(
+      {
+        model: TRAINING_MODEL,
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { responseMimeType: "application/json" },
+      },
+      { feature: "training.plan", userId },
+    );
 
     const text = response.text ?? "";
     try {
@@ -193,7 +197,7 @@ class TrainingService {
       );
     }
 
-    const plan = await this.generatePlan(input);
+    const plan = await this.generatePlan(input, userId);
     const now = new Date();
 
     const stored: StoredTrainingPlan = {

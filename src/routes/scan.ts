@@ -78,7 +78,7 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
             error: "base64ImageA and base64ImageB are required for versus mode",
           });
         }
-        aiResult = await executeVersusScan(base64ImageA, base64ImageB);
+        aiResult = await executeVersusScan(base64ImageA, base64ImageB, userId);
       } else if (payload.scanMode === "skin") {
         const { base64Image, landmarks } = payload as SkinScanBody;
         if (!base64Image) {
@@ -87,7 +87,7 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
             .send({ error: "base64Image is required for skin mode" });
         }
         // Kirim landmarks ke service jika ada (dari MediaPipe FE)
-        aiResult = await executeSkinScan(base64Image, landmarks);
+        aiResult = await executeSkinScan(base64Image, userId, landmarks);
       } else if (payload.scanMode === "reanalyze") {
         const { manualName, manualType, base64Image } =
           payload as ReanalyzeScanBody;
@@ -99,6 +99,7 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
         aiResult = await executeReanalyzeScan(
           manualName,
           manualType,
+          userId,
           base64Image,
         );
       } else if (
@@ -115,13 +116,13 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
           });
         }
 
-        aiResult = await executeAddonScan(addonInput);
+        aiResult = await executeAddonScan(addonInput, userId);
       } else {
         const { base64Image, scanMode } = payload as StandardScanBody;
         if (!base64Image) {
           return reply.status(400).send({ error: "base64Image is required" });
         }
-        aiResult = await executeStandardScan(base64Image, scanMode);
+        aiResult = await executeStandardScan(base64Image, scanMode, userId);
       }
 
       // Format response exactly as frontend expects it, we return the parsed raw data
