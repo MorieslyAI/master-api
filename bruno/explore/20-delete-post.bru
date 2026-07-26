@@ -1,0 +1,21 @@
+meta {
+  name: Explore - Delete Post
+  type: http
+  seq: 20
+}
+
+delete {
+  url: {{baseUrl}}/explore/posts/{{explorePostId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

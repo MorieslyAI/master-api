@@ -1,0 +1,25 @@
+meta {
+  name: Get History (by date)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/dashboard/history?date=2026-07-26
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("response berupa array", function() {
+    expect(res.body).to.be.an("array");
+  });
+}

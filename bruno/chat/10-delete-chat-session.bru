@@ -1,0 +1,25 @@
+meta {
+  name: Delete Chat Session
+  type: http
+  seq: 10
+}
+
+delete {
+  url: {{baseUrl}}/chat/sessions/{{chatSessionId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success true di response", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

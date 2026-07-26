@@ -1,0 +1,35 @@
+meta {
+  name: Daily Check-in
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/user/checkin
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Body opsional — contoh ini menyertakan XP agar tersimpan bersama streak.
+body:json {
+  {
+    "currentXp": 120,
+    "level": 3,
+    "nextLevelXp": 200,
+    "rankTitle": "Sugar Slayer"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("alreadyCheckedIn ada di response", function() {
+    expect(res.body.alreadyCheckedIn).to.be.a("boolean");
+  });
+}

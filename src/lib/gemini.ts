@@ -39,6 +39,22 @@ export interface UsageMetadataLike {
   cachedContentTokenCount?: number;
 }
 
+/** Client-facing token usage shape, attached to Gemini-backed API responses. */
+export interface NormalizedGeminiUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+function normalizeUsage(usage: UsageMetadataLike | undefined): NormalizedGeminiUsage | undefined {
+  if (!usage) return undefined;
+  return {
+    inputTokens: usage.promptTokenCount,
+    outputTokens: usage.candidatesTokenCount,
+    totalTokens: usage.totalTokenCount,
+  };
+}
+
 interface GeminiUsageRecord {
   feature: string;
   model: string;
@@ -116,27 +132,31 @@ export function recordGeminiUsage(
 // ─── Tracked wrappers ───────────────────────────────────────────────────────────
 
 /**
- * Drop-in replacement for `geminiClient.models.generateContent` that also
- * captures + records token usage. Returns the exact same response object.
+ * Wraps `geminiClient.models.generateContent`: records token usage server-side
+ * (log + Firestore, via `recordGeminiUsage`) and also returns a normalized
+ * `usage` object the caller can surface back to the API client.
  */
 export async function generateContentTracked(
   params: GenerateContentParameters,
   meta: GeminiCallMeta,
-): Promise<GenerateContentResponse> {
+): Promise<{ response: GenerateContentResponse; usage: NormalizedGeminiUsage | undefined }> {
   const response = await geminiClient.models.generateContent(params);
   recordGeminiUsage({ ...meta, model: String(params.model) }, response.usageMetadata);
-  return response;
+  return { response, usage: normalizeUsage(response.usageMetadata) };
 }
 
 /**
- * Drop-in replacement for `geminiClient.models.generateContentStream` that
- * also captures + records token usage once the stream completes (or is
- * exited early). Chunks are yielded through unchanged.
+ * Wraps `geminiClient.models.generateContentStream`: records token usage
+ * server-side once the stream completes (or is exited early), and yields
+ * chunks through unchanged. The final normalized `usage` is available as the
+ * generator's *return* value (i.e. via manual `.next()` iteration, or as the
+ * value on the last `{ done: true }` result) — `for await...of` alone
+ * discards it, so callers that need it must drive iteration manually.
  */
 export async function* generateContentStreamTracked(
   params: GenerateContentParameters,
   meta: GeminiCallMeta,
-): AsyncGenerator<GenerateContentResponse> {
+): AsyncGenerator<GenerateContentResponse, NormalizedGeminiUsage | undefined> {
   let lastUsage: UsageMetadataLike | undefined;
   try {
     const stream = await geminiClient.models.generateContentStream(params);
@@ -147,4 +167,5 @@ export async function* generateContentStreamTracked(
   } finally {
     recordGeminiUsage({ ...meta, model: String(params.model) }, lastUsage);
   }
+  return normalizeUsage(lastUsage);
 }

@@ -1,0 +1,21 @@
+meta {
+  name: Get Metrics (Legacy)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/dashboard/metrics?sugarConsumed=20&caloriesConsumed=800&proteinConsumed=40&drinksCount=1&totalItems=3
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

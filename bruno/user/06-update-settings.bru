@@ -1,0 +1,34 @@
+meta {
+  name: Update Settings
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/user/settings
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Semua field opsional — hanya field yang dikirim yang diupdate.
+body:json {
+  {
+    "name": "Budi Santoso Update",
+    "weight": 73,
+    "targetWeight": 68
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("pesan berhasil", function() {
+    expect(res.body.message).to.include("Settings updated");
+  });
+}

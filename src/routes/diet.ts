@@ -115,7 +115,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
             ? `${cat.title} (${cat.desc}). Strict adherence.`
             : (manualGoal ?? "Healthy balanced diet");
 
-        const plan = await dietService.generateAndSaveDailyPlan(
+        const { plan, usage } = await dietService.generateAndSaveDailyPlan(
           request.user.uid,
           category,
           {
@@ -127,7 +127,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
           },
         );
 
-        return reply.send(plan);
+        return reply.send({ ...plan, usage });
       } catch (err) {
         return handleError(err, reply);
       }
@@ -172,7 +172,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
             ? `${cat.title} (${cat.desc}). Focus on meal prep efficiency.`
             : (manualGoal ?? "Healthy balanced diet");
 
-        const plan = await dietService.generateAndSaveWeeklyPlan(
+        const { plan, usage } = await dietService.generateAndSaveWeeklyPlan(
           request.user.uid,
           category,
           {
@@ -183,7 +183,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
           },
         );
 
-        return reply.send(plan);
+        return reply.send({ ...plan, usage });
       } catch (err) {
         return handleError(err, reply);
       }
@@ -228,7 +228,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
       try {
         const { planId, mealIndex, currentMeal, dietTarget } = request.body;
 
-        const newMeal = await dietService.swapMeal({ currentMeal, dietTarget }, request.user.uid);
+        const { data: newMeal, usage } = await dietService.swapMeal({ currentMeal, dietTarget }, request.user.uid);
 
         // Fetch the latest plan and update meals
         const active = await dietService.getActivePlans(request.user.uid);
@@ -240,7 +240,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
           await dietService.updateDailyMeals(request.user.uid, planId, updatedMeals);
         }
 
-        return reply.send(newMeal);
+        return reply.send({ ...newMeal, usage });
       } catch (err) {
         return handleError(err, reply);
       }
@@ -371,7 +371,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
           inputMode === "auto" && cat
             ? `${cat.title} (${cat.desc}). Strict adherence.`
             : (manualGoal ?? "Healthy balanced diet");
-        const plan = await dietService.generateAndSaveDailyPlan(
+        const { plan, usage } = await dietService.generateAndSaveDailyPlan(
           request.user.uid,
           category,
           {
@@ -382,7 +382,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
             userHeight: userProfile.height ?? 170,
           },
         );
-        return reply.send(plan);
+        return reply.send({ ...plan, usage });
       } catch (err) {
         return handleError(err, reply);
       }
@@ -424,7 +424,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
           inputMode === "auto" && cat
             ? `${cat.title} (${cat.desc}). Focus on meal prep efficiency.`
             : (manualGoal ?? "Healthy balanced diet");
-        const plan = await dietService.generateAndSaveWeeklyPlan(
+        const { plan, usage } = await dietService.generateAndSaveWeeklyPlan(
           request.user.uid,
           category,
           {
@@ -434,7 +434,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
             userWeight: userProfile.weight,
           },
         );
-        return reply.send(plan);
+        return reply.send({ ...plan, usage });
       } catch (err) {
         return handleError(err, reply);
       }
@@ -487,7 +487,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
         const { mealIndex, currentMeal, target } = request.body;
         const planId = request.params.planId;
 
-        const newMeal = await dietService.swapMeal({ currentMeal, dietTarget: target }, request.user.uid);
+        const { data: newMeal, usage } = await dietService.swapMeal({ currentMeal, dietTarget: target }, request.user.uid);
 
         const active = await dietService.getActivePlans(request.user.uid);
         const dailyPlan = active.daily;
@@ -497,7 +497,7 @@ export async function dietRoutes(app: FastifyInstance): Promise<void> {
           await dietService.updateDailyMeals(request.user.uid, planId, updatedMeals);
         }
 
-        return reply.send(newMeal);
+        return reply.send({ ...newMeal, usage });
       } catch (err) {
         return handleError(err, reply);
       }

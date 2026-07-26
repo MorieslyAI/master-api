@@ -1,0 +1,35 @@
+meta {
+  name: End Chat Session (Generate Summary)
+  type: http
+  seq: 9
+}
+
+put {
+  url: {{baseUrl}}/chat/sessions/{{chatSessionId}}/end
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "transcript": [
+      { "role": "user", "text": "Halo dokter, saya baru saja makan nasi goreng." },
+      { "role": "model", "text": "Baik, mari kita bahas dampaknya terhadap gula darah Anda." }
+    ]
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("summary dan advice ada di response", function() {
+    expect(res.body.summary).to.be.a("string");
+    expect(res.body.advice).to.be.a("string");
+  });
+}

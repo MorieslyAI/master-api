@@ -673,10 +673,17 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
           imageBase64,
         );
 
-        for await (const token of geminiStream) {
+        // Manual iteration (not `for await...of`) so we can capture the
+        // generator's *return* value — the final token usage — once the
+        // stream finishes, and forward it to the client as one last SSE event.
+        let streamResult = await geminiStream.next();
+        while (!streamResult.done) {
+          const token = streamResult.value;
           fullText += token;
           sseStream.write(`data: ${JSON.stringify({ token })}\n\n`);
+          streamResult = await geminiStream.next();
         }
+        const tokenUsage = streamResult.value;
 
         // ── Save model reply to Firestore after stream completes ─────────────
         await chatService.addMessage(userId, sessionId, {
@@ -687,6 +694,9 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
           timestamp: new Date().toISOString(),
         });
 
+        if (tokenUsage) {
+          sseStream.write(`data: ${JSON.stringify({ usage: tokenUsage })}\n\n`);
+        }
         sseStream.write("data: [DONE]\n\n");
       } catch (streamErr: any) {
         app.log.error("Chat stream error:", streamErr);

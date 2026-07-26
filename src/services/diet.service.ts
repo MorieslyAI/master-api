@@ -1,6 +1,9 @@
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase.js";
-import { generateContentTracked } from "../lib/gemini.js";
+import {
+  generateContentTracked,
+  type NormalizedGeminiUsage,
+} from "../lib/gemini.js";
 
 // ─── Firestore Collection ─────────────────────────────────────────────────────
 const COL_USERS = "users";
@@ -139,8 +142,8 @@ class DietService {
     prompt: string,
     feature: string,
     userId: string,
-  ): Promise<T> {
-    const response = await generateContentTracked(
+  ): Promise<{ data: T; usage: NormalizedGeminiUsage | undefined }> {
+    const { response, usage } = await generateContentTracked(
       {
         model: DIET_MODEL,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -152,9 +155,10 @@ class DietService {
     const text = response.text ?? "";
 
     try {
-      return JSON.parse(
+      const data = JSON.parse(
         text.replace(/```json/g, "").replace(/```/g, "").trim(),
       ) as T;
+      return { data, usage };
     } catch {
       throw new Error("Failed to parse AI response. Please try again.");
     }
@@ -225,7 +229,7 @@ class DietService {
     userId: string,
     category: string,
     input: GenerateDailyPlanInput,
-  ): Promise<StoredDailyPlan> {
+  ): Promise<{ plan: StoredDailyPlan; usage: NormalizedGeminiUsage | undefined }> {
     // ── ANTI-CHEAT: reject if already generated today ───────────────────────
     if (await this.hasGeneratedDailyToday(userId)) {
       throw httpError(
@@ -234,7 +238,7 @@ class DietService {
       );
     }
 
-    const plan = await this.generateDailyPlan(input, userId);
+    const { data: plan, usage } = await this.generateDailyPlan(input, userId);
     const now = new Date();
     const docRef = this.plansCol(userId).doc();
 
@@ -253,7 +257,7 @@ class DietService {
       createdAt: Timestamp.fromDate(now),
     });
 
-    return stored;
+    return { plan: stored, usage };
   }
 
   // ── Generate & Auto-Save Weekly Plan ────────────────────────────────────────
@@ -262,7 +266,7 @@ class DietService {
     userId: string,
     category: string,
     input: GenerateWeeklyPlanInput,
-  ): Promise<StoredWeeklyPlan> {
+  ): Promise<{ plan: StoredWeeklyPlan; usage: NormalizedGeminiUsage | undefined }> {
     // ── ANTI-CHEAT: reject if already generated within the last 7 days ──────
     const { exists, createdAt: lastCreatedAt } = await this.hasGeneratedWeeklyThisWeek(userId);
     if (exists && lastCreatedAt) {
@@ -273,7 +277,7 @@ class DietService {
       );
     }
 
-    const plan = await this.generateWeeklyPlan(input, userId);
+    const { data: plan, usage } = await this.generateWeeklyPlan(input, userId);
     const now = new Date();
     const docRef = this.plansCol(userId).doc();
 
@@ -292,7 +296,7 @@ class DietService {
       createdAt: Timestamp.fromDate(now),
     });
 
-    return stored;
+    return { plan: stored, usage };
   }
 
   // ── Get Active Plans + Generate Flags ────────────────────────────────────────
@@ -417,7 +421,10 @@ class DietService {
 
   // ── AI Generation (internal, no Firestore) ───────────────────────────────────
 
-  async generateDailyPlan(input: GenerateDailyPlanInput, userId: string): Promise<DietPlan> {
+  async generateDailyPlan(
+    input: GenerateDailyPlanInput,
+    userId: string,
+  ): Promise<{ data: DietPlan; usage: NormalizedGeminiUsage | undefined }> {
     const prompt = `
       Act as an elite tactical nutritionist AI. Generate a strict 1-day diet plan.
       
@@ -457,7 +464,10 @@ class DietService {
     return this.generateJSON<DietPlan>(prompt, "diet.daily", userId);
   }
 
-  async generateWeeklyPlan(input: GenerateWeeklyPlanInput, userId: string): Promise<WeeklyPlan> {
+  async generateWeeklyPlan(
+    input: GenerateWeeklyPlanInput,
+    userId: string,
+  ): Promise<{ data: WeeklyPlan; usage: NormalizedGeminiUsage | undefined }> {
     const prompt = `
       Generate a tactical 7-day meal prep plan (Monday to Sunday).
       USER: ${input.userName}, ${input.userAge}yo, ${input.userWeight}kg.
@@ -500,7 +510,10 @@ class DietService {
     return this.generateJSON<WeeklyPlan>(prompt, "diet.weekly", userId);
   }
 
-  async swapMeal(input: SwapMealInput, userId: string): Promise<MealItem> {
+  async swapMeal(
+    input: SwapMealInput,
+    userId: string,
+  ): Promise<{ data: MealItem; usage: NormalizedGeminiUsage | undefined }> {
     const prompt = `
       The user wants to SWAP this meal: "${input.currentMeal.menuName}".
       They dislike it or can't make it.

@@ -1,0 +1,21 @@
+meta {
+  name: Get Range Metrics
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/dashboard/range-metrics?range=7D
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

@@ -1,0 +1,25 @@
+meta {
+  name: List Chat Sessions
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/chat/sessions?limit=10
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("sessions ada di response", function() {
+    expect(res.body.sessions).to.be.an("array");
+  });
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Explore - RSVP Post (FE compat alias)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/explore/posts/{{explorePostId}}/rsvp
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Alias of /explore/events/:id/rsvp — same handler (exploreService.rsvpEvent).
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

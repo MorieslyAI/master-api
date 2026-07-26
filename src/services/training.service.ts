@@ -1,6 +1,9 @@
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase.js";
-import { generateContentTracked } from "../lib/gemini.js";
+import {
+  generateContentTracked,
+  type NormalizedGeminiUsage,
+} from "../lib/gemini.js";
 
 // ─── Firestore Collection ─────────────────────────────────────────────────────
 const COL_USERS = "users";
@@ -111,7 +114,7 @@ class TrainingService {
   private async generatePlan(
     input: GenerateTrainingInput,
     userId: string,
-  ): Promise<OperationPlan> {
+  ): Promise<{ data: OperationPlan; usage: NormalizedGeminiUsage | undefined }> {
     const constraints =
       input.inputMode === "manual"
         ? input.customParams ?? "None"
@@ -156,7 +159,7 @@ class TrainingService {
       }
     `;
 
-    const response = await generateContentTracked(
+    const { response, usage } = await generateContentTracked(
       {
         model: TRAINING_MODEL,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -167,9 +170,10 @@ class TrainingService {
 
     const text = response.text ?? "";
     try {
-      return JSON.parse(
+      const data = JSON.parse(
         text.replace(/```json/g, "").replace(/```/g, "").trim(),
       ) as OperationPlan;
+      return { data, usage };
     } catch {
       throw new Error("Failed to parse AI response. Please try again.");
     }
@@ -184,7 +188,7 @@ class TrainingService {
   async generateAndSavePlan(
     userId: string,
     input: GenerateTrainingInput,
-  ): Promise<StoredTrainingPlan> {
+  ): Promise<{ plan: StoredTrainingPlan; usage: NormalizedGeminiUsage | undefined }> {
     const dateStr = todayUTC();
     const docRef = this.plansCol(userId).doc(dateStr);
 
@@ -197,7 +201,7 @@ class TrainingService {
       );
     }
 
-    const plan = await this.generatePlan(input, userId);
+    const { data: plan, usage } = await this.generatePlan(input, userId);
     const now = new Date();
 
     const stored: StoredTrainingPlan = {
@@ -215,7 +219,7 @@ class TrainingService {
       createdAt: Timestamp.fromDate(now),
     });
 
-    return stored;
+    return { plan: stored, usage };
   }
 
   // ── Get Active Plan (today) ──────────────────────────────────────────────────

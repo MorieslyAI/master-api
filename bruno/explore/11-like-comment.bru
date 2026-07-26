@@ -1,0 +1,21 @@
+meta {
+  name: Explore - Like Comment
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/explore/comments/{{exploreCommentId}}/like
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

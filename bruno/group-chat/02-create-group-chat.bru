@@ -1,0 +1,41 @@
+meta {
+  name: Create Group Chat
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/group-chats
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# inviteeIds boleh kosong — grup tetap dibuat dengan Anda sebagai owner.
+# Isi dengan userId hasil dari "Search Invitees" kalau mau langsung mengundang.
+body:json {
+  {
+    "name": "Test Squad",
+    "description": "Grup untuk testing API",
+    "inviteeIds": []
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("groupChatId", res.body.id);
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("id grup ada di response", function() {
+    expect(res.body.id).to.be.a("string");
+  });
+}

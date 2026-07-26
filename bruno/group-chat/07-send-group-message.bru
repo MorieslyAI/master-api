@@ -1,0 +1,32 @@
+meta {
+  name: Send Group Message
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/group-chats/{{groupChatId}}/messages
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "text": "Halo squad, ada yang mau ikutan tantangan diet minggu ini?"
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("id pesan ada di response", function() {
+    expect(res.body.id).to.be.a("string");
+    expect(res.body.text).to.be.a("string");
+  });
+}

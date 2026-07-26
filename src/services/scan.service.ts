@@ -355,7 +355,7 @@ export const executeStandardScan = async (
   else if (scanMode === "qr") userPrompt = QR_SCAN_PROMPT;
   else if (scanMode === "receipt") userPrompt = RECEIPT_SCAN_PROMPT;
 
-  const response = await generateContentTracked(
+  const { response, usage } = await generateContentTracked(
     {
       model: MANUAL_SCAN_MODEL,
       contents: [
@@ -379,7 +379,7 @@ export const executeStandardScan = async (
       .replace(/\`\`\`json/g, "")
       .replace(/\`\`\`/g, "")
       .trim();
-    return JSON.parse(rawText);
+    return { data: JSON.parse(rawText), usage };
   }
 
   throw new Error("Failed to extract text from AI response");
@@ -400,7 +400,7 @@ export const executeSkinScan = async (
   userId: string,
   landmarks?: { x: number; y: number; z: number }[],
 ) => {
-  const response = await generateContentTracked(
+  const { response, usage } = await generateContentTracked(
     {
       model: MANUAL_SCAN_MODEL,
       contents: [
@@ -446,7 +446,7 @@ export const executeSkinScan = async (
     }
   }
 
-  return result;
+  return { data: result, usage };
 };
 
 /**
@@ -489,7 +489,7 @@ export const executeReanalyzeScan = async (
   parts.push({ text: userHintPrompt });
   parts.push({ text: FOOD_SCAN_PROMPT });
 
-  const response = await generateContentTracked(
+  const { response, usage } = await generateContentTracked(
     {
       model: MANUAL_SCAN_MODEL,
       contents: [{ role: "user", parts }],
@@ -503,7 +503,7 @@ export const executeReanalyzeScan = async (
       .replace(/\`\`\`json/g, "")
       .replace(/\`\`\`/g, "")
       .trim();
-    return JSON.parse(rawText);
+    return { data: JSON.parse(rawText), usage };
   }
 
   throw new Error("Failed to extract text from AI response");
@@ -530,7 +530,7 @@ export const executeVersusScan = async (
     },
   ];
 
-  const response = await generateContentTracked(
+  const { response, usage } = await generateContentTracked(
     {
       model: MANUAL_SCAN_MODEL,
       contents,
@@ -544,14 +544,14 @@ export const executeVersusScan = async (
       .replace(/\`\`\`json/g, "")
       .replace(/\`\`\`/g, "")
       .trim();
-    return JSON.parse(rawText);
+    return { data: JSON.parse(rawText), usage };
   }
 
   throw new Error("Failed to extract text from AI response");
 };
 
 export const executeAddonScan = async (addOnText: string, userId: string) => {
-  const response = await generateContentTracked(
+  const { response, usage } = await generateContentTracked(
     {
       model: MANUAL_SCAN_MODEL,
       contents: [
@@ -577,7 +577,7 @@ export const executeAddonScan = async (addOnText: string, userId: string) => {
       .replace(/\`\`\`/g, "")
       .trim();
 
-    return JSON.parse(rawText);
+    return { data: JSON.parse(rawText), usage };
   }
 
   throw new Error("Failed to extract text from AI response");

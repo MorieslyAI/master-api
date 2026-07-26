@@ -1,0 +1,29 @@
+meta {
+  name: Mark Meal Consumed
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/diet/consumed
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "planId": "{{dietDailyPlanId}}",
+    "planType": "daily",
+    "mealIndex": 0
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

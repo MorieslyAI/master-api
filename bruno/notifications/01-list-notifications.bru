@@ -1,0 +1,26 @@
+meta {
+  name: List Notifications
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/notifications?limit=30
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("notifications dan unreadCount ada di response", function() {
+    expect(res.body.notifications).to.be.an("array");
+    expect(res.body.unreadCount).to.be.a("number");
+  });
+}

@@ -1,0 +1,49 @@
+meta {
+  name: Generate Weekly Plan
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/diet/weekly
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# category: fat_loss | muscle | maintenance | keto
+body:json {
+  {
+    "category": "maintenance",
+    "inputMode": "auto",
+    "userProfile": {
+      "name": "Budi Santoso",
+      "age": 25,
+      "weight": 75
+    }
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("dietWeeklyPlanId", res.body.id);
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("plan id ada di response", function() {
+    expect(res.body.id).to.be.a("string");
+  });
+
+  test("days berisi 7 hari", function() {
+    expect(res.body.days).to.be.an("array");
+    expect(res.body.days.length).to.equal(7);
+  });
+}

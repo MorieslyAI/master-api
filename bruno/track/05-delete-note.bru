@@ -1,0 +1,25 @@
+meta {
+  name: Delete Note
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/track/notes/{{trackNoteId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success true", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

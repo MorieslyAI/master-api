@@ -1,0 +1,23 @@
+meta {
+  name: Explore - Purchase Product (FE compat alias)
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/explore/shop/{{exploreProductId}}/purchase
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Alias of POST /explore/shop/purchase — same handler (exploreService.purchaseProduct),
+# productId comes from the URL param instead of the body.
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+}

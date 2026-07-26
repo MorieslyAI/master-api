@@ -1,0 +1,30 @@
+meta {
+  name: Mark Block Completed
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/training/completed
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# type: workout | meal
+body:json {
+  {
+    "planId": "{{trainingPlanId}}",
+    "type": "workout",
+    "blockIndex": 0
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

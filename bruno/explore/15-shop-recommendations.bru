@@ -1,0 +1,25 @@
+meta {
+  name: Explore - Shop Recommendations
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/explore/shop/recommendations
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("products ada di response", function() {
+    expect(res.body.products).to.be.an("array");
+  });
+}

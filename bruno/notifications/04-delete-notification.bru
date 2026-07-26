@@ -1,0 +1,29 @@
+meta {
+  name: Delete Notification
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/notifications/{{notificationId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Tidak ada endpoint HTTP untuk membuat notifikasi secara langsung — notifikasi
+# dibuat otomatis oleh server (mis. setelah POST /dashboard/history). Jalankan
+# "List Notifications" dulu, lalu set var {{notificationId}} dari salah satu
+# id di response sebelum menjalankan request ini.
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success ada di response", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

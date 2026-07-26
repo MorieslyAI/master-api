@@ -1,0 +1,45 @@
+meta {
+  name: Swap Meal
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/diet/swap
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "planId": "{{dietDailyPlanId}}",
+    "mealIndex": 0,
+    "currentMeal": {
+      "type": "Breakfast",
+      "menuName": "Scrambled Eggs & Spinach",
+      "contents": "Eggs with sauteed spinach",
+      "ingredients": ["Egg", "Spinach"],
+      "instructions": "Boil eggs. Mix with spinach.",
+      "prepTime": "10m",
+      "calories": 320,
+      "sugarGrams": 2,
+      "fiberGrams": 4
+    },
+    "dietTarget": "fat_loss"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("meal baru ada di response", function() {
+    expect(res.body.menuName).to.be.a("string");
+    expect(res.body.type).to.equal("Breakfast");
+  });
+}

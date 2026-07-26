@@ -1,0 +1,26 @@
+meta {
+  name: Get Active Plans
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/diet/active
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("flag canGenerate ada di response", function() {
+    expect(res.body.canGenerateDaily).to.be.a("boolean");
+    expect(res.body.canGenerateWeekly).to.be.a("boolean");
+  });
+}

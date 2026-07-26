@@ -1,0 +1,21 @@
+meta {
+  name: Get Agent Status
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/dashboard/status
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

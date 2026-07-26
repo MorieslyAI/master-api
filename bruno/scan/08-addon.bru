@@ -1,0 +1,32 @@
+meta {
+  name: Scan Add-on (Text Only)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/scan
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "scanMode": "addon",
+    "addOnText": "2 sendok makan gula"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success true", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

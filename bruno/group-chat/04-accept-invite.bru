@@ -1,0 +1,29 @@
+meta {
+  name: Accept Group Invite
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/group-chats/{{groupChatId}}/accept
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Catatan: owner grup otomatis berstatus "joined" saat dibuat, jadi endpoint
+# ini hanya relevan diuji dengan {{accessToken}} milik user yang DIUNDANG
+# (status "invited"), bukan owner. Ganti token di atas dengan akun invitee
+# untuk pengujian end-to-end yang sesungguhnya.
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success ada di response", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

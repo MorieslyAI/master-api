@@ -1,0 +1,36 @@
+meta {
+  name: Send Chat Message (SSE)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/chat/sessions/{{chatSessionId}}/message
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "message": "Halo dokter, saya baru saja makan nasi goreng, apakah gula darah saya akan naik?",
+    "history": [],
+    "userProfile": {
+      "name": "Budi Santoso",
+      "age": 25,
+      "weight": 75
+    }
+  }
+}
+
+# Endpoint ini merespons dengan text/event-stream (SSE), bukan JSON biasa —
+# Bruno akan menampilkan body mentah `data: {...}` per baris. Hanya status
+# code yang diverifikasi di sini.
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Get Group Messages
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/group-chats/{{groupChatId}}/messages?limit=50
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("messages ada di response", function() {
+    expect(res.body.messages).to.be.an("array");
+  });
+}

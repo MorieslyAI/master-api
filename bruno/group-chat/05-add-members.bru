@@ -1,0 +1,32 @@
+meta {
+  name: Add Members to Group
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/group-chats/{{groupChatId}}/members
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Isi dengan userId nyata hasil dari "Search Invitees".
+body:json {
+  {
+    "inviteeIds": ["REPLACE_WITH_REAL_USER_ID"]
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success ada di response", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

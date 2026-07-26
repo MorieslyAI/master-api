@@ -1,0 +1,25 @@
+meta {
+  name: Mark All Notifications Read
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/notifications/read-all
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success ada di response", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

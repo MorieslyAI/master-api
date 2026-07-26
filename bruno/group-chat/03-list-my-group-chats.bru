@@ -1,0 +1,25 @@
+meta {
+  name: List My Group Chats
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/group-chats
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("groups ada di response", function() {
+    expect(res.body.groups).to.be.an("array");
+  });
+}

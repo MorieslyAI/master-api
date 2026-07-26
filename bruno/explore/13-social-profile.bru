@@ -1,0 +1,21 @@
+meta {
+  name: Explore - Social Profile
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/explore/profile
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

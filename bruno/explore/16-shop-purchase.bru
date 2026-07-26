@@ -1,0 +1,29 @@
+meta {
+  name: Explore - Purchase Product
+  type: http
+  seq: 16
+}
+
+post {
+  url: {{baseUrl}}/explore/shop/purchase
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# {{exploreProductId}} is set by "Explore - Shop Products" (grabs the first
+# product's id from the catalog). Run that request first.
+body:json {
+  {
+    "productId": "{{exploreProductId}}"
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+}

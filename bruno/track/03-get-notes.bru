@@ -1,0 +1,25 @@
+meta {
+  name: Get Notes
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/track/notes
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("notes berupa array", function() {
+    expect(res.body.notes).to.be.an("array");
+  });
+}

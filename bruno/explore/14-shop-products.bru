@@ -1,0 +1,31 @@
+meta {
+  name: Explore - Shop Products
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/explore/shop/products?limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.products && res.body.products[0]) {
+    bru.setVar("exploreProductId", res.body.products[0].id);
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("products ada di response", function() {
+    expect(res.body.products).to.be.an("array");
+  });
+}

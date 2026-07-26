@@ -1,0 +1,21 @@
+meta {
+  name: Explore - Get News
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/explore/news?limit=10
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

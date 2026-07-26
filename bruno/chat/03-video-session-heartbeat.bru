@@ -1,0 +1,26 @@
+meta {
+  name: Video Session Heartbeat
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/chat/video/sessions/{{videoSessionId}}/heartbeat
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("status sesi ada di response", function() {
+    expect(res.body.status).to.be.a("string");
+    expect(res.body.shouldEnd).to.be.a("boolean");
+  });
+}

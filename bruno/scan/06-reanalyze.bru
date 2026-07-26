@@ -1,0 +1,34 @@
+meta {
+  name: Scan Reanalyze (Manual Name, No Image)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/scan
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# base64Image opsional untuk mode ini — contoh ini tidak menyertakan gambar.
+body:json {
+  {
+    "scanMode": "reanalyze",
+    "manualName": "Nasi Goreng Kampung",
+    "manualType": "food"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success true", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

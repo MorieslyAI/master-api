@@ -1,0 +1,37 @@
+meta {
+  name: Create Note
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/track/notes
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "text": "Merasa lebih berenergi setelah kurangi gula."
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("trackNoteId", res.body.note.id);
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("note id ada di response", function() {
+    expect(res.body.note.id).to.be.a("string");
+  });
+}

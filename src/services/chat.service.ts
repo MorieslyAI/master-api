@@ -3,6 +3,7 @@ import { getDb } from "../lib/firebase.js";
 import {
   generateContentTracked,
   generateContentStreamTracked,
+  type NormalizedGeminiUsage,
 } from "../lib/gemini.js";
 
 // ─── Firestore Schema ─────────────────────────────────────────────────────────
@@ -155,7 +156,7 @@ export const chatService = {
     userMessage: string,
     userId: string,
     imageBase64?: string,
-  ): AsyncGenerator<string> {
+  ): AsyncGenerator<string, NormalizedGeminiUsage | undefined> {
     const systemInstruction = [
       `You are "Dr. Moriesly", a gentle, polite, and caring health consultant.`,
       `USER INFO: ${userProfile.name}, ${userProfile.age}yo, ${userProfile.weight}kg.`,
@@ -197,19 +198,26 @@ export const chatService = {
       { feature: "chat.stream", userId },
     );
 
-    for await (const chunk of stream) {
-      const token = chunk.text;
+    // Manual iteration (not `for await...of`) so we can capture the tracked
+    // stream's *return* value — the final normalized token usage — once it
+    // finishes, and propagate it as this generator's own return value.
+    let result = await stream.next();
+    while (!result.done) {
+      const token = result.value.text;
       if (token) yield token;
+      result = await stream.next();
     }
+    return result.value;
   },
 
   // ── Generate AI summary (helper) ────────────────────────────────────────────
   async generateSessionSummary(
     transcript: Array<{ role: string; text: string }>,
     userId?: string,
-  ): Promise<{ summary: string; advice: string }> {
+  ): Promise<{ summary: string; advice: string; usage: NormalizedGeminiUsage | undefined }> {
     let summary = "Session completed.";
     let advice  = "Keep up the great work!";
+    let usage: NormalizedGeminiUsage | undefined;
 
     if (transcript.length > 1) {
       try {
@@ -226,7 +234,7 @@ export const chatService = {
           TRANSCRIPT: ${transcriptTxt}
         `;
 
-        const response = await generateContentTracked(
+        const tracked = await generateContentTracked(
           {
             model:    "gemini-2.5-flash",
             contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -234,9 +242,10 @@ export const chatService = {
           },
           { feature: "chat.summary", userId },
         );
+        usage = tracked.usage;
 
-        if (response.text) {
-          const raw  = response.text.replace(/```json/g, "").replace(/```/g, "").trim();
+        if (tracked.response.text) {
+          const raw  = tracked.response.text.replace(/```json/g, "").replace(/```/g, "").trim();
           const data = JSON.parse(raw);
           summary    = data.summary || summary;
           advice     = data.advice  || advice;
@@ -246,7 +255,7 @@ export const chatService = {
       }
     }
 
-    return { summary, advice };
+    return { summary, advice, usage };
   },
 
   // ── Save Video Call as Chat Session ─────────────────────────────────────────
@@ -254,8 +263,8 @@ export const chatService = {
     userId: string,
     sessionId: string,
     transcript: Array<{ role: string; text: string }>,
-  ): Promise<{ summary: string; advice: string }> {
-    const { summary, advice } = await this.generateSessionSummary(transcript, userId);
+  ): Promise<{ summary: string; advice: string; usage: NormalizedGeminiUsage | undefined }> {
+    const { summary, advice, usage } = await this.generateSessionSummary(transcript, userId);
 
     const db = getDb();
     const now = new Date().toISOString();
@@ -292,7 +301,7 @@ export const chatService = {
 
     await batch.commit();
 
-    return { summary, advice };
+    return { summary, advice, usage };
   },
 
   // ── End a session: generate AI summary, mark as ended ──────────────────────
@@ -300,8 +309,8 @@ export const chatService = {
     userId: string,
     sessionId: string,
     transcript: Array<{ role: string; text: string }>,
-  ): Promise<{ summary: string; advice: string }> {
-    const { summary, advice } = await this.generateSessionSummary(transcript, userId);
+  ): Promise<{ summary: string; advice: string; usage: NormalizedGeminiUsage | undefined }> {
+    const { summary, advice, usage } = await this.generateSessionSummary(transcript, userId);
 
     await getDb()
       .collection(COL_USERS)
@@ -315,7 +324,7 @@ export const chatService = {
         updatedAt: new Date().toISOString(),
       });
 
-    return { summary, advice };
+    return { summary, advice, usage };
   },
 
   // ── Delete session + all its messages (batch) ───────────────────────────────

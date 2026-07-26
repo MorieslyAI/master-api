@@ -86,12 +86,12 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
           userGender: userProfile.gender,
         };
 
-        const plan = await trainingService.generateAndSavePlan(
+        const { plan, usage } = await trainingService.generateAndSavePlan(
           request.user.uid,
           input,
         );
 
-        return reply.send(plan);
+        return reply.send({ ...plan, usage });
       } catch (err) {
         return handleError(err, reply);
       }
@@ -202,8 +202,8 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
           userWeight: userProfile.weight,
           userGender: userProfile.gender,
         };
-        const plan = await trainingService.generateAndSavePlan(request.user.uid, input);
-        return reply.send(plan);
+        const { plan, usage } = await trainingService.generateAndSavePlan(request.user.uid, input);
+        return reply.send({ ...plan, usage });
       } catch (err) {
         return handleError(err, reply);
       }

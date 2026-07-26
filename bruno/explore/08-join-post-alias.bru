@@ -1,0 +1,22 @@
+meta {
+  name: Explore - Join Post (FE compat alias)
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/explore/posts/{{explorePostId}}/join
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Alias of /explore/groups/:id/join — same handler (exploreService.joinGroup).
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

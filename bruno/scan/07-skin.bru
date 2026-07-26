@@ -1,0 +1,35 @@
+meta {
+  name: Scan Skin
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/scan
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Butuh gambar wajah JPEG asli sebagai base64 (tanpa prefix "data:") di var testImageBase64,
+# lihat bruno/environments/Local.bru. "landmarks" opsional (478 titik dari MediaPipe FE) — dikosongkan di sini,
+# server akan pakai koordinat fallback berdasarkan nama zona.
+body:json {
+  {
+    "scanMode": "skin",
+    "base64Image": "{{testImageBase64}}"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success true", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

@@ -1,0 +1,38 @@
+meta {
+  name: Explore - Create Post Comment
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/explore/posts/{{explorePostId}}/comments
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "content": "Nice work, keep it up!"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("exploreCommentId", res.body.comment.id);
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("comment ada di response", function() {
+    expect(res.body.success).to.equal(true);
+    expect(res.body.comment).to.be.an("object");
+  });
+}

@@ -1,0 +1,51 @@
+meta {
+  name: Generate Training Plan
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/training/generate
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# mode: burn | build, inputMode: auto | manual
+body:json {
+  {
+    "mode": "burn",
+    "inputMode": "auto",
+    "focusArea": "Full Body",
+    "intensity": "Medium",
+    "equipment": "Bodyweight",
+    "userProfile": {
+      "age": 25,
+      "weight": 75,
+      "gender": "male"
+    }
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("trainingPlanId", res.body.id);
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("plan id ada di response", function() {
+    expect(res.body.id).to.be.a("string");
+  });
+
+  test("schedule ada di response", function() {
+    expect(res.body.schedule).to.be.an("array");
+  });
+}

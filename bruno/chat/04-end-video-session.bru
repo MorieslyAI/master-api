@@ -1,0 +1,35 @@
+meta {
+  name: End Video Call Session
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/chat/video/sessions/{{videoSessionId}}/end
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "reason": "manual_end",
+    "transcript": [
+      { "role": "user", "text": "Hi doctor, I have a question about my sugar intake." },
+      { "role": "model", "text": "Of course, tell me more about what you've been eating today." }
+    ]
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("status ended di response", function() {
+    expect(res.body.status).to.equal("ended");
+  });
+}

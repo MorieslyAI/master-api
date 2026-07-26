@@ -1,0 +1,32 @@
+meta {
+  name: Log Weight
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/track/weight
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "weight": 74.5
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("entry ada di response", function() {
+    expect(res.body.entry).to.be.an("object");
+    expect(res.body.entry.weight).to.equal(74.5);
+  });
+}

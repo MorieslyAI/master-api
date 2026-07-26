@@ -1,0 +1,25 @@
+meta {
+  name: Explore - My Purchases
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/explore/shop/purchases
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("purchasedIds ada di response", function() {
+    expect(res.body.purchasedIds).to.be.an("array");
+  });
+}

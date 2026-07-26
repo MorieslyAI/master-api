@@ -1,0 +1,50 @@
+meta {
+  name: Generate Daily Plan
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/diet/generate
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# category: fat_loss | muscle | maintenance | keto
+body:json {
+  {
+    "category": "fat_loss",
+    "inputMode": "auto",
+    "userProfile": {
+      "name": "Budi Santoso",
+      "age": 25,
+      "weight": 75,
+      "height": 172
+    }
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("dietDailyPlanId", res.body.id);
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("plan id ada di response", function() {
+    expect(res.body.id).to.be.a("string");
+  });
+
+  test("meals berisi 3 waktu makan", function() {
+    expect(res.body.meals).to.be.an("array");
+    expect(res.body.meals.length).to.equal(3);
+  });
+}

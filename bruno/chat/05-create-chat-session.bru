@@ -1,0 +1,37 @@
+meta {
+  name: Create Chat Session
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/chat/sessions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "sessionType": "chat"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    bru.setVar("chatSessionId", res.body.id);
+  }
+}
+
+tests {
+  test("status 201", function() {
+    expect(res.status).to.equal(201);
+  });
+
+  test("id sesi ada di response", function() {
+    expect(res.body.id).to.be.a("string");
+  });
+}

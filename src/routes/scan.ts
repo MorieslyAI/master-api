@@ -69,7 +69,7 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
         });
       }
 
-      let aiResult;
+      let aiResult: { data: unknown; usage: unknown };
 
       if (payload.scanMode === "versus") {
         const { base64ImageA, base64ImageB } = payload as VersusScanBody;
@@ -129,7 +129,8 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
       // The frontend will save it locally as 'history' items. Later, we can add a 'SAVE' step here to firestore.
       return reply.send({
         success: true,
-        data: aiResult,
+        data: aiResult.data,
+        usage: aiResult.usage,
       });
     } catch (e: any) {
       req.log.error(e, "Error processing AI Scan");

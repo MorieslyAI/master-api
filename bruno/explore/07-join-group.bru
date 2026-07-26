@@ -1,0 +1,27 @@
+meta {
+  name: Explore - Join/Leave Group
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/explore/groups/{{explorePostId}}/join
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Toggle: first call joins, calling again on the same post leaves. Semantically
+# meant for posts created with type: "group".
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("joined ada di response", function() {
+    expect(res.body.joined).to.be.a("boolean");
+  });
+}

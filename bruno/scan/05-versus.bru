@@ -1,0 +1,35 @@
+meta {
+  name: Scan Versus
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/scan
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Butuh dua gambar JPEG asli sebagai base64 (tanpa prefix "data:") di var
+# testImageBase64 & testImageBase64B, lihat bruno/environments/Local.bru.
+body:json {
+  {
+    "scanMode": "versus",
+    "base64ImageA": "{{testImageBase64}}",
+    "base64ImageB": "{{testImageBase64B}}"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success true", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

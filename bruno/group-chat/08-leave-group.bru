@@ -1,0 +1,28 @@
+meta {
+  name: Leave Group Chat
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/group-chats/{{groupChatId}}/leave
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Catatan: taruh request ini terakhir di alur pengujian — setelah leave,
+# {{groupChatId}} tidak lagi bisa diakses oleh {{accessToken}} milik user ini
+# (kecuali dia owner dan kepemilikan sudah dialihkan ke member lain).
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success ada di response", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}

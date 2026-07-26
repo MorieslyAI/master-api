@@ -1,0 +1,26 @@
+meta {
+  name: Get Chat Session + Messages
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/chat/sessions/{{chatSessionId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("session dan messages ada di response", function() {
+    expect(res.body.session).to.be.an("object");
+    expect(res.body.messages).to.be.an("array");
+  });
+}

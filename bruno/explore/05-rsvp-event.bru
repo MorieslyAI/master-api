@@ -1,0 +1,22 @@
+meta {
+  name: Explore - RSVP Event
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/explore/events/{{explorePostId}}/rsvp
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Note: works on any post id, but semantically meant for posts created with type: "event".
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

@@ -1,0 +1,21 @@
+meta {
+  name: Explore - Delete Comment
+  type: http
+  seq: 19
+}
+
+delete {
+  url: {{baseUrl}}/explore/comments/{{exploreCommentId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+}

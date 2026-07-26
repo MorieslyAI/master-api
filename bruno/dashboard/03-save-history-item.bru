@@ -1,0 +1,39 @@
+meta {
+  name: Save History Item
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/dashboard/history
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+# Body bebas (tidak ada schema validation di route) — minimal harus punya "id".
+# Contoh ini meniru item hasil scan makanan yang di-log user.
+body:json {
+  {
+    "id": "smoke-test-log-001",
+    "name": "Nasi Goreng Kampung",
+    "type": "food",
+    "calories": 450,
+    "sugar": 6,
+    "localDate": "2026-07-26",
+    "timestamp": "2026-07-26T10:00:00.000Z"
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("success true", function() {
+    expect(res.body.success).to.equal(true);
+  });
+}
