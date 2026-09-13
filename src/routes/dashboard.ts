@@ -114,6 +114,38 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  // ── GET /dashboard/history/summary ────────────────────────────────────────
+  // Mengembalikan tanggal-tanggal dalam satu bulan yang punya log, untuk
+  // indikator dot di kalender "Time Travel" tanpa perlu fetch semua item.
+  app.get<{ Querystring: { month: string } }>(
+    "/dashboard/history/summary",
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["month"],
+          properties: {
+            month: { type: "string", pattern: "^\\d{4}-\\d{2}$" },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const summary = await dashboardService.getHistoryMonthSummary(
+          request.user.uid,
+          request.query.month,
+        );
+        return reply.send(summary);
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
   // ── GET /dashboard/metrics (Legacy) ────────────────────────────────────────
 
   // Mengembalikan metrik dashboard yang dipersonalisasi berdasarkan profil user

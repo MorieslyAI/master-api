@@ -700,6 +700,46 @@ export const dashboardService = {
     return history;
   },
 
+  // ── GET /dashboard/history/summary logic ────────────────────────────────────
+  // Mengembalikan daftar tanggal dalam satu bulan yang punya log, tanpa perlu
+  // fetch seluruh item satu-per-satu. Dipakai untuk render dot indikator di
+  // kalender "Time Travel" pada HistoryScreen, termasuk untuk tanggal yang
+  // belum pernah dimuat ke local state di frontend.
+  async getHistoryMonthSummary(
+    userId: string,
+    monthStr: string, // format YYYY-MM
+  ): Promise<{ date: string; hasIssues: boolean }[]> {
+    const db = getDb();
+    const startDate = `${monthStr}-01`;
+    const endDate = `${monthStr}-31`; // string compare aman krn format zero-padded
+
+    const logsSnapshot = await db
+      .collection(COL_USERS)
+      .doc(userId)
+      .collection("logs")
+      .where("date", ">=", startDate)
+      .where("date", "<=", endDate)
+      .get();
+
+    const issuesByDate = new Map<string, boolean>();
+    logsSnapshot.forEach((docLog) => {
+      const data = docLog.data() as Record<string, any>;
+      const date = data["date"] as string;
+      if (!date) return;
+
+      const isIssue =
+        data["action"] === "rejected" || (data["sugarg"] || 0) > 20;
+
+      const current = issuesByDate.get(date) ?? false;
+      issuesByDate.set(date, current || isIssue);
+    });
+
+    return Array.from(issuesByDate.entries()).map(([date, hasIssues]) => ({
+      date,
+      hasIssues,
+    }));
+  },
+
   async getMetrics(
     userId: string,
     stats: DashboardQueryStats,
