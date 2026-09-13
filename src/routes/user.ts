@@ -89,7 +89,7 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
   // Performs daily check-in: computes streak and saves XP to Firestore.
   // XP body is optional — if provided, it is saved to Firestore alongside the streak.
   // Safe to call repeatedly — if already checked in today, returns alreadyCheckedIn: true.
-  app.post<{ Body: Partial<CheckInXpState> }>(
+  app.post<{ Body: Partial<CheckInXpState> & { date?: string } }>(
     '/user/checkin',
     {
       preHandler: authenticate,
@@ -102,6 +102,9 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
             level:       { type: 'number', minimum: 1, maximum: 100 },
             nextLevelXp: { type: 'number', minimum: 1 },
             rankTitle:   { type: 'string', maxLength: 80 },
+            // Tanggal lokal (YYYY-MM-DD) dari device user, dipakai sebagai
+            // acuan "hari ini" agar tidak salah karena perbedaan timezone.
+            date:        { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
           },
           additionalProperties: false,
         },
@@ -109,11 +112,12 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       try {
-        const body = request.body as Partial<CheckInXpState>;
+        const body = request.body as Partial<CheckInXpState> & { date?: string };
         const hasXp = body.currentXp !== undefined || body.level !== undefined;
         const result = await userService.checkIn(
           request.user.uid,
           hasXp ? (body as CheckInXpState) : undefined,
+          body.date,
         );
         return reply.send(result);
       } catch (err) {

@@ -157,6 +157,17 @@ function toIsoString(value: any): string | undefined {
   return undefined;
 }
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+// Menghitung string tanggal (YYYY-MM-DD) H-1 dari sebuah string tanggal,
+// menggunakan komponen UTC agar tidak terpengaruh timezone server.
+function previousDateString(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().split('T')[0];
+}
+
 // ─── Sugar Limit Calculator ──────────────────────────────────────────────────
 // Replikasi logika kalkulasi dari FE / SetupScreen.tsx
 function computeSugarLimit(dto: CalibrationDTO): number {
@@ -340,7 +351,8 @@ export const userService = {
 
   async checkIn(
     userId: string,
-    xpState?: CheckInXpState
+    xpState?: CheckInXpState,
+    clientDate?: string
   ): Promise<CheckInResult> {
     const db = getDb();
     const userRef = db.collection(COL_USERS).doc(userId);
@@ -350,7 +362,13 @@ export const userService = {
 
     const data = userDoc.data() as Record<string, any>;
 
-    const today = new Date().toISOString().split('T')[0];
+    // Pakai tanggal lokal dari klien (device user) sebagai acuan "hari ini".
+    // Tanpa ini, user di WIB/WITA/WIT bisa dapat streak yang salah karena
+    // tanggal UTC server berbeda dari kalender lokal user di sekitar tengah malam.
+    const today =
+      clientDate && DATE_ONLY_PATTERN.test(clientDate)
+        ? clientDate
+        : new Date().toISOString().split('T')[0];
     const lastCheckIn = (data['lastCheckInDate'] as string | undefined) ?? null;
     const currentStreak = (data['streak'] as number | undefined) ?? 0;
 
@@ -380,9 +398,7 @@ export const userService = {
     }
 
     // Hitung streak baru
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    const yesterdayStr = previousDateString(today);
 
     const newStreak = lastCheckIn === yesterdayStr ? currentStreak + 1 : 1;
 
