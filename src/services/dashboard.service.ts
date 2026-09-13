@@ -34,6 +34,7 @@ export interface DashboardQueryStats {
   sugarConsumed: number; // grams consumed today
   caloriesConsumed: number; // kcal consumed today
   proteinConsumed: number; // grams consumed today
+  fiberConsumed?: number; // grams consumed today
   drinksCount: number; // number of drink items logged today
   totalItems: number; // total items logged today
   totalGI: number; // total Glycemic Index from all items
@@ -452,6 +453,79 @@ function computeMetabolicInsight(
   };
 }
 
+// ─── Weakness Generator ───────────────────────────────────────────────────────
+
+function computeWeakness(
+  macros: MacroTargets,
+  stats: DashboardQueryStats,
+): string {
+  if (stats.totalItems === 0) {
+    return "No intake logged yet today — track a meal to surface your weak spot.";
+  }
+
+  const fiberConsumed = stats.fiberConsumed || 0;
+  const fiberPct = macros.fiber > 0 ? (fiberConsumed / macros.fiber) * 100 : 100;
+  if (fiberPct < 50) {
+    return `Fiber intake is falling short today (${Math.round(fiberConsumed)}g of ${macros.fiber}g target). Add vegetables, legumes, or whole grains to your next meal.`;
+  }
+
+  const proteinPct =
+    macros.protein > 0 ? (stats.proteinConsumed / macros.protein) * 100 : 100;
+  if (proteinPct < 50) {
+    return `Protein intake is trailing behind target (${Math.round(stats.proteinConsumed)}g of ${macros.protein}g). Prioritize a protein-rich meal next.`;
+  }
+
+  if (stats.sugarConsumed > 0 && stats.sugarConsumed >= fiberConsumed * 2) {
+    return "Sugar intake is outpacing fiber today — that combination speeds up glucose spikes.";
+  }
+
+  return "No major weak spot today — your macros are holding steady.";
+}
+
+// ─── Blindspot Generator ──────────────────────────────────────────────────────
+
+function computeBlindspot(
+  stats: DashboardQueryStats,
+  historyItems: any[],
+): string {
+  const foodDrinkItems = historyItems.filter(
+    (item) => item.type === "food" || item.type === "drink",
+  );
+
+  if (foodDrinkItems.length === 0) {
+    return "Not enough data yet today to spot a blindspot — log a meal to unlock this insight.";
+  }
+
+  let morningCalories = 0;
+  let eveningCalories = 0;
+  for (const item of foodDrinkItems) {
+    const cal = Number(item.calories) || 0;
+    const hour = item.timestamp ? new Date(item.timestamp).getHours() : null;
+    if (hour === null) continue;
+    if (hour < 11) morningCalories += cal;
+    else if (hour >= 19) eveningCalories += cal;
+  }
+
+  const totalCalories = stats.caloriesConsumed || 1;
+  const morningShare = morningCalories / totalCalories;
+  const eveningShare = eveningCalories / totalCalories;
+  const currentHour = new Date().getHours();
+
+  if (currentHour >= 13 && morningShare < 0.15) {
+    return "You tend to under-eat in the morning — most of today's calories are loading up later in the day.";
+  }
+
+  if (eveningShare > 0.5) {
+    return "Over half of today's calories are landing late in the day — that pattern can disrupt sleep and recovery.";
+  }
+
+  if (stats.drinksCount === 0 && stats.totalItems >= 2) {
+    return "You're logging food but skipping drinks — hydration is an easy blindspot to miss.";
+  }
+
+  return "No major blindspot detected today — your eating pattern looks balanced.";
+}
+
 // ─── Dashboard Service ────────────────────────────────────────────────────────
 
 export const dashboardService = {
@@ -500,7 +574,7 @@ export const dashboardService = {
         carbsConsumed += Number(log.carbs) || 0;
         fatConsumed += Number(log.fat) || 0;
         sugarConsumed += Number(log.sugar) || Number(log.sugarg) || 0;
-        fiberConsumed += Number(log.fiber) || 0;
+        fiberConsumed += Number(log.fiber) || Number(log.macros?.fiber) || 0;
         totalGI += Number(log.glycemicIndex) || 0; // Tracking total GI
 
         if (log.type === "drink") drinksCount += 1;
@@ -514,6 +588,7 @@ export const dashboardService = {
       sugarConsumed,
       caloriesConsumed,
       proteinConsumed,
+      fiberConsumed,
       drinksCount,
       totalItems: nutritionItems,
       totalGI,
@@ -549,8 +624,8 @@ export const dashboardService = {
               ? "Target berat badan diproyeksi tercapai"
               : "Fase optimal",
         },
-        weakness: "Asupan serat hari ini kurang memenuhi standar minimum.",
-        blindspot: "Anda cenderung kekurangan kalori di pagi hari.",
+        weakness: computeWeakness(macroTargets, stats),
+        blindspot: computeBlindspot(stats, historyItems),
         metabolicInsight: metabolicInsight.text,
       },
       goals: {
