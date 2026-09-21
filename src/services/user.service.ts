@@ -81,6 +81,7 @@ export interface UserProfileResponse {
 
   streak: number;
   lastCheckInDate: string | null;
+  checkInDates: string[];
   currentXp: number;
   level: number;
   nextLevelXp: number;
@@ -127,6 +128,7 @@ export interface CheckInResult {
   alreadyCheckedIn: boolean;
   streak: number;
   lastCheckInDate: string;
+  checkInDates: string[];
   currentXp: number;
   level: number;
   nextLevelXp: number;
@@ -166,6 +168,44 @@ function previousDateString(dateStr: string): string {
   const date = new Date(Date.UTC(y, m - 1, d));
   date.setUTCDate(date.getUTCDate() - 1);
   return date.toISOString().split('T')[0];
+}
+
+// Jumlah maksimal riwayat tanggal check-in yang disimpan/dikirim ke klien.
+const CHECKIN_HISTORY_LIMIT = 60;
+
+// Menyusun riwayat tanggal check-in user (urut naik, tanpa duplikat).
+// Untuk user lama yang belum punya `checkInDates`, riwayat direkonstruksi dari
+// `streak` + `lastCheckInDate` (hari-hari berurutan yang berakhir di
+// lastCheckInDate), supaya data yang sudah ada tidak hilang.
+function buildCheckInHistory(
+  data: Record<string, any>,
+  extraDate?: string
+): string[] {
+  const dates = new Set<string>();
+
+  const stored = data['checkInDates'];
+  if (Array.isArray(stored)) {
+    for (const d of stored) {
+      if (typeof d === 'string' && DATE_ONLY_PATTERN.test(d)) dates.add(d);
+    }
+  }
+
+  const last = data['lastCheckInDate'];
+  if (typeof last === 'string' && DATE_ONLY_PATTERN.test(last)) {
+    const streak = Math.min(
+      Math.max(Number(data['streak']) || 1, 1),
+      CHECKIN_HISTORY_LIMIT
+    );
+    let cursor = last;
+    for (let i = 0; i < streak; i++) {
+      dates.add(cursor);
+      cursor = previousDateString(cursor);
+    }
+  }
+
+  if (extraDate) dates.add(extraDate);
+
+  return [...dates].sort().slice(-CHECKIN_HISTORY_LIMIT);
 }
 
 // ─── Sugar Limit Calculator ──────────────────────────────────────────────────
@@ -307,6 +347,7 @@ export const userService = {
 
       streak: data['streak'] ?? 0,
       lastCheckInDate: data['lastCheckInDate'] ?? null,
+      checkInDates: buildCheckInHistory(data),
       currentXp: data['currentXp'] ?? 0,
       level: data['level'] ?? 1,
       nextLevelXp: data['nextLevelXp'] ?? 100,
@@ -393,6 +434,7 @@ export const userService = {
         alreadyCheckedIn: true,
         streak: currentStreak,
         lastCheckInDate: today,
+        checkInDates: buildCheckInHistory(data, today),
         ...xpToSave,
       };
     }
@@ -402,9 +444,15 @@ export const userService = {
 
     const newStreak = lastCheckIn === yesterdayStr ? currentStreak + 1 : 1;
 
+    // Simpan riwayat semua tanggal check-in (bukan hanya yang terakhir) agar
+    // kalender "Weekly Consistency" tetap menampilkan hari-hari lama yang
+    // sudah check-in walaupun streak ter-reset.
+    const checkInDates = buildCheckInHistory(data, today);
+
     await userRef.update({
       streak: newStreak,
       lastCheckInDate: today,
+      checkInDates,
       updatedAt: Timestamp.now(),
       ...xpToSave,
     });
@@ -413,6 +461,7 @@ export const userService = {
       alreadyCheckedIn: false,
       streak: newStreak,
       lastCheckInDate: today,
+      checkInDates,
       ...xpToSave,
     };
   },
