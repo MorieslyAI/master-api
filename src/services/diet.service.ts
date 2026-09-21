@@ -1,5 +1,6 @@
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase.js";
+import { notificationsService } from "./notifications.service.js";
 import {
   generateContentTracked,
   type NormalizedGeminiUsage,
@@ -257,6 +258,10 @@ class DietService {
       createdAt: Timestamp.fromDate(now),
     });
 
+    void notificationsService
+      .notifyDietStarted(userId, "daily", { id: stored.id, label: stored.target })
+      .catch(() => {});
+
     return { plan: stored, usage };
   }
 
@@ -295,6 +300,10 @@ class DietService {
       ...stored,
       createdAt: Timestamp.fromDate(now),
     });
+
+    void notificationsService
+      .notifyDietStarted(userId, "weekly", { id: stored.id, label: stored.weekName })
+      .catch(() => {});
 
     return { plan: stored, usage };
   }

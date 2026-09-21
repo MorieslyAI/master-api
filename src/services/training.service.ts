@@ -1,5 +1,6 @@
 import { Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase.js";
+import { notificationsService } from "./notifications.service.js";
 import {
   generateContentTracked,
   type NormalizedGeminiUsage,
@@ -218,6 +219,9 @@ class TrainingService {
       ...stored,
       createdAt: Timestamp.fromDate(now),
     });
+
+    // Fire-and-forget: kegagalan notifikasi tidak boleh menggagalkan generate.
+    void notificationsService.notifyTrainingStarted(userId, stored).catch(() => {});
 
     return { plan: stored, usage };
   }

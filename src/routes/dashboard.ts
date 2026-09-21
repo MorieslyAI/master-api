@@ -5,6 +5,7 @@ import {
   type TimeRange,
   type UserStatusResponse,
 } from "../services/dashboard.service.js";
+import { notificationsService } from "../services/notifications.service.js";
 import { authenticate } from "../middleware/authenticate.js";
 
 // ─── Route Error Handler ──────────────────────────────────────────────────────
@@ -107,6 +108,14 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
           item.date = new Date().toISOString().split("T")[0];
         }
         await dashboardService.saveHistoryItem(request.user.uid, item);
+
+        // Fire-and-forget: notifikasi tidak boleh menunda / menggagalkan save.
+        void notificationsService
+          .generateFromHistoryItem(request.user.uid, item)
+          .catch((e) =>
+            request.log.warn({ err: e }, "[notifications] generate failed"),
+          );
+
         return reply.send({ success: true, id: item.id });
       } catch (err) {
         return handleError(err, reply);

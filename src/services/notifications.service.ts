@@ -15,6 +15,8 @@ export type NotifCategory =
   | "streak"
   | "medical"
   | "scan"
+  | "training"
+  | "diet"
   | "system";
 
 export interface StoredNotification {
@@ -123,9 +125,59 @@ export const notificationsService = {
       .delete();
   },
 
+  // ── Training plan started ──────────────────────────────────────────────────
+  //
+  // Dipanggil dari trainingService.generateAndSavePlan (fire-and-forget).
+  // ID stabil per plan sehingga tidak pernah menggandakan notifikasi.
+  async notifyTrainingStarted(
+    userId: string,
+    plan: {
+      id: string;
+      codename: string;
+      mode: "burn" | "build";
+      totalCaloriesBurn: number;
+      schedule: { timeLabel: string }[];
+    },
+  ): Promise<void> {
+    const blocks = plan.schedule?.length ?? 0;
+    const goal =
+      plan.mode === "burn"
+        ? `Target burn ${Math.round(plan.totalCaloriesBurn || 0)} kcal.`
+        : "Muscle build protocol engaged.";
+    await this.upsert(userId, {
+      id: `training-start-${plan.id}`,
+      type: "info",
+      category: "training",
+      title: "MISSION STARTED",
+      message: `${plan.codename} is live — ${blocks} block${blocks === 1 ? "" : "s"} scheduled. ${goal} Complete every block to keep the streak.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+    });
+  },
+
+  // ── Diet plan started (daily / weekly) ─────────────────────────────────────
+  async notifyDietStarted(
+    userId: string,
+    kind: "daily" | "weekly",
+    plan: { id: string; label: string },
+  ): Promise<void> {
+    await this.upsert(userId, {
+      id: `diet-${kind}-start-${plan.id}`,
+      type: "info",
+      category: "diet",
+      title: kind === "daily" ? "DAILY FUEL PLAN ACTIVE" : "WEEKLY SUPPLY ACTIVE",
+      message:
+        kind === "daily"
+          ? `Today's meal protocol "${plan.label}" is ready. Log each meal as you eat it to stay under your sugar limit.`
+          : `Weekly supply "${plan.label}" is locked in. Prep ahead and tick meals off through the week.`,
+      timestamp: new Date().toISOString(),
+      read: false,
+    });
+  },
+
   // ── Generate and persist notifications from a saved history item ───────────
   //
-  // Called after every POST /dashboard/history save.
+  // Called after every POST /dashboard/history save (see routes/dashboard.ts).
   // Fires-and-forgets from the route; errors are swallowed so they never block
   // the main save response.
   async generateFromHistoryItem(userId: string, item: any): Promise<void> {
