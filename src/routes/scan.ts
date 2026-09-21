@@ -8,6 +8,7 @@ import {
 } from "../services/scan.service.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { checkAndIncrementUsage } from "../services/usage.service.js";
+import { getUserPlan, isScanTypeAllowed } from "../services/plan.service.js";
 
 interface StandardScanBody {
   base64Image: string;
@@ -59,6 +60,24 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       if (!payload.scanMode) {
         return reply.status(400).send({ error: "scanMode is required" });
+      }
+
+      // "reanalyze" dan "addon" adalah aksi lanjutan atas item yang sudah pernah
+      // di-scan, bukan tipe scan baru — jadi tidak ikut dibatasi per-plan.
+      const isGatedScanType =
+        payload.scanMode !== "reanalyze" &&
+        payload.scanMode !== "addon" &&
+        payload.scanMode !== "add-on";
+
+      if (isGatedScanType) {
+        const plan = await getUserPlan(userId);
+        if (!isScanTypeAllowed(plan, payload.scanMode)) {
+          return reply.status(403).send({
+            error: `Tipe scan "${payload.scanMode}" tidak tersedia di paket Anda saat ini. Upgrade untuk membuka fitur ini.`,
+            code: "PLAN_UPGRADE_REQUIRED",
+            currentPlan: plan,
+          });
+        }
       }
 
       // Check scan limits

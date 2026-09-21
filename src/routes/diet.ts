@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { dietService, type MealItem } from "../services/diet.service.js";
 import { authenticate } from "../middleware/authenticate.js";
+import { requirePlanFeature } from "../middleware/requirePlanFeature.js";
 
 // ─── Route Error Handler ──────────────────────────────────────────────────────
 
@@ -75,6 +76,13 @@ const DIET_CATEGORIES: Record<string, { title: string; desc: string }> = {
 
 export async function dietRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
+  app.addHook(
+    "preHandler",
+    requirePlanFeature(
+      (limits) => limits.dietPlanWeeks > 0,
+      "Diet plan generator hanya tersedia di paket Pro ke atas.",
+    ),
+  );
 
   // ── POST /diet/generate ───────────────────────────────────────────────────
   // Generate and auto-save today's daily meal plan (Mission Protocol).

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { trainingService, type GenerateTrainingInput } from "../services/training.service.js";
 import { authenticate } from "../middleware/authenticate.js";
+import { requirePlanFeature } from "../middleware/requirePlanFeature.js";
 
 // ─── Error Helper ─────────────────────────────────────────────────────────────
 
@@ -37,6 +38,13 @@ interface MarkCompletedBody {
 
 export async function trainingRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
+  app.addHook(
+    "preHandler",
+    requirePlanFeature(
+      (limits) => limits.trainingPlanWeeks > 0,
+      "Training plan generator hanya tersedia di paket Pro ke atas.",
+    ),
+  );
 
   // ── POST /training/generate ───────────────────────────────────────────────
   // Generate and save today's training plan (one per day).

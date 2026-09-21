@@ -1,6 +1,6 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { getDb } from "../lib/firebase.js";
-import { PLAN_LIMITS } from "../config/plan.constants.js";
+import { getPlanLimits, getUserPlan } from "./plan.service.js";
 
 function getDayKey(date = new Date()): string {
   return date.toISOString().split("T")[0]; // '2026-05-27'
@@ -13,25 +13,15 @@ export async function checkAndIncrementUsage(
   const db = getDb();
   const dayKey = getDayKey();
 
-  // 1. Dapatkan role/plan user terlebih dahulu
-  const userRef = db.collection("users").doc(userId);
-  const userSnap = await userRef.get();
-  const userData = userSnap.data() || {};
-  const subscriptionPlan = String(
-    userData["subscriptionPlan"] || userData["plan"] || "free",
-  );
-  const role = String(userData["role"] || "user");
-
-  let currentPlan = subscriptionPlan;
-  if (role === "admin" || role === "whitelist") {
-    currentPlan = "whitelist";
-  }
-
-  const limits = PLAN_LIMITS[currentPlan] || PLAN_LIMITS.free;
+  const plan = await getUserPlan(userId);
+  const limits = getPlanLimits(plan);
   const targetLimit = type === "scan" ? limits.scanCount : limits.chatCount;
 
-  // 2. Dapatkan atau update usage di transaksi
-  const usageRef = userRef.collection("daily_usage").doc(dayKey);
+  const usageRef = db
+    .collection("users")
+    .doc(userId)
+    .collection("daily_usage")
+    .doc(dayKey);
 
   return db.runTransaction(async (transaction) => {
     const doc = await transaction.get(usageRef);
@@ -46,7 +36,6 @@ export async function checkAndIncrementUsage(
       return { allowed: false, remaining: 0, limit: targetLimit };
     }
 
-    // Eksekusi penambahan counter
     transaction.set(
       usageRef,
       {

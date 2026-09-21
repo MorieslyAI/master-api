@@ -70,6 +70,22 @@ export const env = {
   // Contoh:
   //   CORS_ORIGIN=http://localhost:3000,https://localhost,capacitor://localhost
   CORS_ORIGIN: get("CORS_ORIGIN", "http://localhost:3000"),
+
+  // ─── RevenueCat ────────────────────────────────────────────────────────────
+  // Secret API Key (v1, prefix "sk_") dari RevenueCat Dashboard → Project Settings
+  // → API Keys. Dipakai server-to-server untuk menarik status subscriber terbaru.
+  REVENUECAT_SECRET_API_KEY: get("REVENUECAT_SECRET_API_KEY", ""),
+  // Header "Authorization" yang dikonfigurasi di RevenueCat Dashboard →
+  // Project Settings → Integrations → Webhooks, dipakai untuk memverifikasi
+  // bahwa request webhook memang berasal dari RevenueCat.
+  REVENUECAT_WEBHOOK_AUTH_HEADER: get("REVENUECAT_WEBHOOK_AUTH_HEADER", ""),
+  // Identifier entitlement di RevenueCat Dashboard yang dipetakan ke plan "pro"
+  // dan "pro_max". Harus sama persis dengan Entitlement Identifier di dashboard.
+  REVENUECAT_ENTITLEMENT_PRO: get("REVENUECAT_ENTITLEMENT_PRO", "pro"),
+  REVENUECAT_ENTITLEMENT_PRO_MAX: get(
+    "REVENUECAT_ENTITLEMENT_PRO_MAX",
+    "pro_max",
+  ),
 } as const;
 
 export type Env = typeof env;

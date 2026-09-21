@@ -15,12 +15,15 @@ auth:bearer {
 }
 
 # Body opsional — contoh ini menyertakan XP agar tersimpan bersama streak.
+# "date" = tanggal lokal device user (YYYY-MM-DD), dipakai sebagai acuan
+# "hari ini" agar streak tidak salah karena perbedaan timezone server (UTC).
 body:json {
   {
     "currentXp": 120,
     "level": 3,
     "nextLevelXp": 200,
-    "rankTitle": "Sugar Slayer"
+    "rankTitle": "Sugar Slayer",
+    "date": "2026-09-13"
   }
 }
 
