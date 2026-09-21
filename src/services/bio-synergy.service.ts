@@ -178,12 +178,13 @@ export const bioSynergyService = {
       const now = new Date();
       const createdAt = now.toISOString();
       const nextAvailableAt = new Date(now.getTime() + COOLDOWN_MS).toISOString();
+      // set() tanpa merge menimpa seluruh dokumen → kunci generatingSince ikut hilang.
+      // (FieldValue.delete() tidak boleh dipakai di set() tanpa {merge:true}.)
       await ref.set({
         text,
         model: BIO_MODEL,
         createdAt,
         nextAvailableAt,
-        generatingSince: FieldValue.delete(),
       });
 
       return {
