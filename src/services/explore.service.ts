@@ -49,6 +49,8 @@ export interface SocialPost {
   likes: number;
   comments: number;
   createdAt: string; // ISO 8601
+  /** true bila user yang sedang login sudah me-like post ini (diisi saat getPosts). */
+  likedByMe?: boolean;
 }
 
 export interface SocialComment {
@@ -159,11 +161,14 @@ export const exploreService = {
   // ══════════════════════════════════════════════════════════════════════════
 
   // Fetch feed with optional type filter & cursor-based pagination
-  async getPosts(opts: {
-    type?: PostType | "all";
-    limit?: number;
-    after?: string; // postId cursor
-  }): Promise<{ posts: SocialPost[]; hasMore: boolean }> {
+  async getPosts(
+    userId: string,
+    opts: {
+      type?: PostType | "all";
+      limit?: number;
+      after?: string; // postId cursor
+    },
+  ): Promise<{ posts: SocialPost[]; hasMore: boolean }> {
     const db = getDb();
     const limit = Math.min(opts.limit ?? 20, 50);
 
@@ -180,9 +185,22 @@ export const exploreService = {
     const snap = await query.limit(limit + 1).get();
     const docs = snap.docs as any[];
     const hasMore = docs.length > limit;
-    const posts = (hasMore ? docs.slice(0, limit) : docs).map((d: any) => ({
+    const pageDocs = hasMore ? docs.slice(0, limit) : docs;
+
+    // Satu batch read untuk cek "apakah user ini sudah like" — tanpa ini
+    // frontend kehilangan status like (warna merah) setiap refresh.
+    const likeSnaps = pageDocs.length
+      ? await db.getAll(
+          ...pageDocs.map((d: any) =>
+            db.collection(COL_POSTS).doc(d.id).collection("likes").doc(userId),
+          ),
+        )
+      : [];
+
+    const posts = pageDocs.map((d: any, i: number) => ({
       id: d.id,
       ...d.data(),
+      likedByMe: likeSnaps[i]?.exists ?? false,
     })) as SocialPost[];
 
     return { posts, hasMore };

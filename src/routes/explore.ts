@@ -90,7 +90,7 @@ export async function exploreRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       try {
-        const result = await exploreService.getPosts({
+        const result = await exploreService.getPosts(request.user.uid, {
           type: request.query.type as PostType | "all" | undefined,
           limit: request.query.limit,
           after: request.query.after,
