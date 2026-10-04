@@ -40,7 +40,7 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
   free: {
     scanCount: 5,
     allowedScanTypes: ["food"],
-    chatCount: 0,
+    chatCount: 5,
     videoCallMinutesPerMonth: 0,
     historyRetentionDays: 7,
     feedGenerationLimit: 0,
