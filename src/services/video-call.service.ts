@@ -232,7 +232,7 @@ async function resolvePolicy(userId: string): Promise<VideoCallPolicy> {
   const userData = (userSnap.data() ?? {}) as Record<string, unknown>;
 
   const plan = await getUserPlan(userId);
-  const limits = getPlanLimits(plan);
+  const limits = await getPlanLimits(plan);
 
   const userPolicyRaw = (userData["videoPolicy"] ?? {}) as Record<
     string,

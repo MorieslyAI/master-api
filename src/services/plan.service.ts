@@ -1,12 +1,12 @@
 import { getDb } from "../lib/firebase.js";
 import {
   PLAN_LIMITS,
-  isPlanId,
   type PlanId,
   type PlanLimits,
 } from "../config/plan.constants.js";
 
 const COL_USERS = "users";
+const COL_PLANS = "plans";
 
 function isExpired(expiresAt: unknown): boolean {
   if (!expiresAt) return false;
@@ -20,31 +20,58 @@ function isExpired(expiresAt: unknown): boolean {
   return date.getTime() < Date.now();
 }
 
+function mergePlanLimits(
+  plan: PlanId,
+  rawLimits: Record<string, unknown> | undefined,
+): PlanLimits {
+  const base = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+  return {
+    ...base,
+    ...(rawLimits ?? {}),
+  } as PlanLimits;
+}
+
 /**
- * Resolves the effective plan for a user: role (admin/whitelist) always wins,
- * then subscriptionPlan written by the RevenueCat webhook, falling back to
- * "free" if unset or expired (defensive — normally EXPIRATION events keep this in sync).
+ * Resolves the effective subscription plan for a user. Role is intentionally
+ * kept separate: an admin can manage the system without becoming "Pro Max".
  */
 export async function getUserPlan(userId: string): Promise<PlanId> {
   const db = getDb();
   const snap = await db.collection(COL_USERS).doc(userId).get();
   const data = snap.data() ?? {};
 
-  const role = String(data["role"] ?? "user");
-  if (role === "admin" || role === "whitelist") return "whitelist";
+  const entitlementOverride = String(data["entitlementOverride"] ?? "");
+  if (entitlementOverride === "whitelist") return "whitelist";
+
+  const subscriptionStatus = String(data["subscriptionStatus"] ?? "").toLowerCase();
+  if (subscriptionStatus === "expired" || subscriptionStatus === "cancelled") {
+    return "free";
+  }
 
   const rawPlan = String(data["subscriptionPlan"] ?? data["plan"] ?? "free");
   if (rawPlan !== "free" && isExpired(data["subscriptionExpiresAt"])) {
     return "free";
   }
 
-  return isPlanId(rawPlan) ? rawPlan : "free";
+  return rawPlan || "free";
 }
 
-export function getPlanLimits(plan: PlanId): PlanLimits {
-  return PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+export async function getPlanLimits(plan: PlanId): Promise<PlanLimits> {
+  const snap = await getDb().collection(COL_PLANS).doc(plan).get();
+  if (!snap.exists) return PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+
+  const data = snap.data() ?? {};
+  if (String(data["status"] ?? "active") !== "active") {
+    return PLAN_LIMITS.free;
+  }
+
+  return mergePlanLimits(plan, data["limits"] as Record<string, unknown> | undefined);
 }
 
-export function isScanTypeAllowed(plan: PlanId, scanType: string): boolean {
-  return getPlanLimits(plan).allowedScanTypes.includes(scanType);
+export async function isScanTypeAllowed(
+  plan: PlanId,
+  scanType: string,
+): Promise<boolean> {
+  const limits = await getPlanLimits(plan);
+  return limits.allowedScanTypes.includes(scanType);
 }

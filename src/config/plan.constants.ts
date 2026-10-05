@@ -1,4 +1,4 @@
-export type PlanId = "free" | "pro" | "pro_max" | "whitelist";
+export type PlanId = string;
 
 export interface PlanLimits {
   /** Batas scan AI per hari. */
@@ -36,7 +36,7 @@ const ALL_SCAN_TYPES = [
   "skin",
 ];
 
-export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
+export const PLAN_LIMITS: Record<string, PlanLimits> = {
   free: {
     scanCount: 5,
     allowedScanTypes: ["food"],

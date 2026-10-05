@@ -14,7 +14,7 @@ export async function checkAndIncrementUsage(
   const dayKey = getDayKey();
 
   const plan = await getUserPlan(userId);
-  const limits = getPlanLimits(plan);
+  const limits = await getPlanLimits(plan);
   const targetLimit = type === "scan" ? limits.scanCount : limits.chatCount;
 
   const usageRef = db
