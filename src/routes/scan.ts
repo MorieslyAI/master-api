@@ -71,7 +71,7 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
 
       if (isGatedScanType) {
         const plan = await getUserPlan(userId);
-        if (!(await isScanTypeAllowed(plan, payload.scanMode))) {
+        if (!isScanTypeAllowed(plan, payload.scanMode)) {
           return reply.status(403).send({
             error: `Tipe scan "${payload.scanMode}" tidak tersedia di paket Anda saat ini. Upgrade untuk membuka fitur ini.`,
             code: "PLAN_UPGRADE_REQUIRED",

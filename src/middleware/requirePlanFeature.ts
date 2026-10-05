@@ -15,7 +15,7 @@ export function requirePlanFeature(
     reply: FastifyReply,
   ): Promise<void> {
     const plan = await getUserPlan(request.user.uid);
-    const limits = await getPlanLimits(plan);
+    const limits = getPlanLimits(plan);
 
     if (!predicate(limits)) {
       reply.code(403).send({
