@@ -904,7 +904,7 @@ export const dashboardService = {
   ): Promise<UserStatusResponse> {
     const db = getDb();
     const doc = await db.collection(COL_USERS).doc(userId).get();
-    if (!doc.exists) throw httpError("User tidak ditemukan.", 404);
+    if (!doc.exists) throw httpError("User not found.", 404);
 
     const data = doc.data() as Record<string, any>;
     const p = data["profile"] as StoredProfile | undefined;
@@ -946,7 +946,7 @@ export const dashboardService = {
       activeAlerts.push({
         type: "danger",
         title: "Sugar Debt Active",
-        message: `Kamu sudah melampaui ${Math.round(sugarDebt * 10) / 10}g batas gula hari ini. Lakukan aktivitas fisik ringan untuk membakarnya.`,
+        message: `You are ${Math.round(sugarDebt * 10) / 10}g over today's sugar limit. Add a short low-intensity activity session to help offset it.`,
       });
     }
 
@@ -956,7 +956,7 @@ export const dashboardService = {
       activeAlerts.push({
         type: "info",
         title: "Medical Monitoring",
-        message: `Pemantauan aktif untuk: ${medicalConditions.join(", ")}.`,
+        message: `Active monitoring enabled for: ${medicalConditions.join(", ")}.`,
       });
     }
 
@@ -978,7 +978,7 @@ export const dashboardService = {
 
     const nextEval = new Date();
     nextEval.setDate(nextEval.getDate() + 7);
-    const nextEvalStr = `${nextEval.getDate()} ${nextEval.toLocaleString("id-ID", { month: "long" })} ${nextEval.getFullYear()}`;
+    const nextEvalStr = `${nextEval.toLocaleString("en-US", { month: "long" })} ${nextEval.getDate()}, ${nextEval.getFullYear()}`;
 
     return {
       name: data["displayName"] ?? "Agent",
