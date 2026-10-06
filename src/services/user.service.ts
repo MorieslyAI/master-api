@@ -1,5 +1,6 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { getDb } from '../lib/firebase.js';
+import { getUserPlan } from './plan.service.js';
 
 // ─── Firestore Collection ────────────────────────────────────────────────────
 const COL_USERS = 'users';
@@ -88,6 +89,8 @@ export interface UserProfileResponse {
   rankTitle: string;
 
   isWearableConnected: boolean;
+  subscriptionPlan: string;
+  subscriptionExpiresAt: string | null;
 
   profile?: {
     name: string;
@@ -336,6 +339,7 @@ export const userService = {
     if (!doc.exists) throw httpError('User not found.', 404);
 
     const data = doc.data() as Record<string, any>;
+    const subscriptionPlan = await getUserPlan(userId);
 
     const result: UserProfileResponse = {
       userId: doc.id,
@@ -354,6 +358,8 @@ export const userService = {
       rankTitle: data['rankTitle'] ?? 'Rookie Agent',
 
       isWearableConnected: data['isWearableConnected'] ?? false,
+      subscriptionPlan,
+      subscriptionExpiresAt: toIsoString(data['subscriptionExpiresAt']) ?? null,
     };
 
     if (data['profile']) {
