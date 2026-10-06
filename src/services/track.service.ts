@@ -67,6 +67,44 @@ function isoToWeekdayShort(dateStr: string): string {
   return d.toLocaleDateString("id-ID", { weekday: "short" });
 }
 
+function normalizePercentages<T extends { percent: number }>(items: T[]): T[] {
+  const activeItems = items
+    .map((item, index) => ({ index, value: Number(item.percent) || 0 }))
+    .filter((item) => item.value > 0);
+  const total = activeItems.reduce((sum, item) => sum + item.value, 0);
+
+  if (total <= 0) return items;
+
+  const rounded = activeItems.map((item) => {
+    const rawTenths = (item.value / total) * 1000;
+    const tenths = Math.floor(rawTenths);
+    return {
+      index: item.index,
+      tenths,
+      remainder: rawTenths - tenths,
+    };
+  });
+
+  let remainingTenths =
+    1000 - rounded.reduce((sum, item) => sum + item.tenths, 0);
+  [...rounded]
+    .sort((a, b) => b.remainder - a.remainder)
+    .forEach((item) => {
+      if (remainingTenths <= 0) return;
+      item.tenths += 1;
+      remainingTenths -= 1;
+    });
+
+  const normalizedByIndex = new Map(
+    rounded.map((item) => [item.index, item.tenths / 10]),
+  );
+
+  return items.map((item, index) => ({
+    ...item,
+    percent: normalizedByIndex.get(index) ?? 0,
+  }));
+}
+
 // ─── Track Service ─────────────────────────────────────────────────────────────
 
 export const trackService = {
@@ -152,7 +190,12 @@ export const trackService = {
           if (Array.isArray(vitamins)) {
             vitamins.forEach((v: any) => {
               if (v.name) {
-                vitaminMap[v.name] = { amount: v.amount ?? "—", percent: v.percent ?? 0 };
+                const current = vitaminMap[v.name];
+                vitaminMap[v.name] = {
+                  amount: v.amount ?? current?.amount ?? "—",
+                  percent:
+                    (current?.percent ?? 0) + (Number(v.percent) || 0),
+                };
               }
             });
           }
@@ -215,11 +258,11 @@ export const trackService = {
         fat:      Math.round(todayFat),
         fiber:    Math.round(todayFiber),
         sugar:    Math.round(todaySugar * 10) / 10,
-        vitamins: Object.entries(vitaminMap).map(([name, v]) => ({
+        vitamins: normalizePercentages(Object.entries(vitaminMap).map(([name, v]) => ({
           name,
           amount: v.amount,
           percent: v.percent,
-        })),
+        }))),
       },
       sugarLimit: profile["sugarLimit"] ?? 25,
       calorieTarget,
