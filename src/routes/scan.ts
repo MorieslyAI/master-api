@@ -85,6 +85,10 @@ export const scanRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
       if (!usage.allowed) {
         return reply.status(429).send({
           error: `Limit scan harian Anda telah mencapai batas maksimal (${usage.limit} scan/hari).`,
+          code: "DAILY_LIMIT_REACHED",
+          limitType: "scan",
+          limit: usage.limit,
+          remaining: usage.remaining,
         });
       }
 
