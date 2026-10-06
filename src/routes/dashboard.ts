@@ -210,7 +210,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
   // ── GET /dashboard/range-metrics ──────────────────────────────────────────
   // Mengembalikan metabolicTrend dan energyTrend untuk range waktu tertentu.
-  // Query param: range (30S | 1M | 15M | 1H | 24H | 7D | 30D)
+  // Query param: range (24H | 7D | 30D | 90D)
   app.get<{ Querystring: { range: TimeRange } }>(
     "/dashboard/range-metrics",
     {
@@ -223,7 +223,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
           properties: {
             range: {
               type: "string",
-              enum: ["30S", "1M", "15M", "1H", "24H", "7D", "30D"],
+              enum: ["24H", "7D", "30D", "90D"],
             },
           },
           additionalProperties: false,

@@ -2,17 +2,14 @@ import { getDb } from "../lib/firebase.js";
 
 // ─── Time Range Helper ────────────────────────────────────────────────────────
 
-export type TimeRange = "30S" | "1M" | "15M" | "1H" | "24H" | "7D" | "30D";
+export type TimeRange = "24H" | "7D" | "30D" | "90D";
 
 function timeRangeToMs(range: TimeRange): number {
   const map: Record<TimeRange, number> = {
-    "30S": 30 * 1000,
-    "1M": 60 * 1000,
-    "15M": 15 * 60 * 1000,
-    "1H": 60 * 60 * 1000,
     "24H": 24 * 60 * 60 * 1000,
     "7D": 7 * 24 * 60 * 60 * 1000,
     "30D": 30 * 24 * 60 * 60 * 1000,
+    "90D": 90 * 24 * 60 * 60 * 1000,
   };
   return map[range];
 }
