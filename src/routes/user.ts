@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { userService, type CalibrationDTO, type CheckInXpState, type UpdateSettingsDTO } from '../services/user.service.js';
 import { authenticate } from '../middleware/authenticate.js';
+import {
+  accountDeletionService,
+  type CreateAccountDeletionRequestDTO,
+} from '../services/account-deletion.service.js';
 
 // ─── Route Error Handler ──────────────────────────────────────────────────────
 
@@ -12,6 +16,58 @@ function handleError(err: unknown, reply: FastifyReply): void {
 // ─── User Routes ──────────────────────────────────────────────────────────────
 
 export async function userRoutes(app: FastifyInstance): Promise<void> {
+
+  // ── POST /user/account-deletion-request ──────────────────────────────────
+  // Creates an auditable request. It does not delete user data synchronously.
+  app.post<{ Body: CreateAccountDeletionRequestDTO }>(
+    '/user/account-deletion-request',
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 3, timeWindow: '1 hour' } },
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            reason: { type: 'string', maxLength: 1000 },
+            source: { type: 'string', maxLength: 80 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      try {
+        const item = await accountDeletionService.createForUser(
+          request.user.uid,
+          request.body,
+        );
+        return reply.code(201).send({
+          message: 'Permintaan penghapusan akun berhasil dikirim.',
+          item,
+        });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
+
+  // ── GET /user/account-deletion-request ───────────────────────────────────
+  // Returns the latest request linked to the authenticated user.
+  app.get(
+    '/user/account-deletion-request',
+    {
+      preHandler: authenticate,
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      try {
+        const item = await accountDeletionService.getForUser(request.user.uid);
+        return reply.send({ item });
+      } catch (err) {
+        return handleError(err, reply);
+      }
+    },
+  );
 
   // ── POST /user/calibration ─────────────────────────────────────────────────
   // Saves user calibration data (Steps 1-4 from SetupScreen).

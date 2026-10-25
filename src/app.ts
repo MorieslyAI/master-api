@@ -21,6 +21,7 @@ import { groupChatRoutes } from "./routes/group-chat.js";
 import { webhookRoutes } from "./routes/webhooks.js";
 import { billingRoutes } from "./routes/billing.js";
 import { bioSynergyRoutes } from "./routes/bio-synergy.js";
+import { adminAccountDeletionRoutes } from "./routes/admin-account-deletion.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -118,6 +119,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(webhookRoutes);
   await app.register(billingRoutes);
   await app.register(bioSynergyRoutes);
+  await app.register(adminAccountDeletionRoutes);
 
   return app;
 }
