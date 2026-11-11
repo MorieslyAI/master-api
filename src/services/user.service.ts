@@ -1,6 +1,9 @@
 import { Timestamp } from 'firebase-admin/firestore';
 import { getDb } from '../lib/firebase.js';
-import { getUserPlan } from './plan.service.js';
+import {
+  getSubscriptionExpiresAt,
+  getUserPlan,
+} from './plan.service.js';
 
 // ─── Firestore Collection ────────────────────────────────────────────────────
 const COL_USERS = 'users';
@@ -359,7 +362,8 @@ export const userService = {
 
       isWearableConnected: data['isWearableConnected'] ?? false,
       subscriptionPlan,
-      subscriptionExpiresAt: toIsoString(data['subscriptionExpiresAt']) ?? null,
+      subscriptionExpiresAt:
+        getSubscriptionExpiresAt(data) ?? null,
     };
 
     if (data['profile']) {

@@ -8,6 +8,42 @@ import {
 
 const COL_USERS = "users";
 
+type UserSubscriptionData = Record<string, unknown>;
+
+function asRecord(value: unknown): UserSubscriptionData {
+  return value !== null && typeof value === "object"
+    ? (value as UserSubscriptionData)
+    : {};
+}
+
+function normalizePlanId(value: unknown): PlanId | null {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+  return isPlanId(normalized) ? normalized : null;
+}
+
+function getSubscriptionExpiryValue(data: UserSubscriptionData): unknown {
+  const subscription = asRecord(data["subscription"]);
+
+  return (
+    subscription["currentPeriodEnd"] ??
+    subscription["endsAt"] ??
+    data["subscriptionExpiry"] ??
+    data["subscriptionExpiresAt"] ??
+    null
+  );
+}
+
+function getSubscriptionStatus(data: UserSubscriptionData): string | null {
+  const subscription = asRecord(data["subscription"]);
+  const value = subscription["status"] ?? data["subscriptionStatus"];
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized || null;
+}
+
 function isExpired(expiresAt: unknown): boolean {
   if (!expiresAt) return false;
   const date =
@@ -30,15 +66,54 @@ export async function getUserPlan(userId: string): Promise<PlanId> {
   const snap = await db.collection(COL_USERS).doc(userId).get();
   const data = snap.data() ?? {};
 
+  return resolveUserPlan(data);
+}
+
+/**
+ * Resolves the canonical admin subscription object first, with RevenueCat
+ * root fields and older root plan fields kept as migration fallbacks.
+ */
+export function resolveUserPlan(data: UserSubscriptionData): PlanId {
+  const subscription = asRecord(data["subscription"]);
+
   const role = String(data["role"] ?? "user");
   if (role === "admin" || role === "whitelist") return "whitelist";
 
-  const rawPlan = String(data["subscriptionPlan"] ?? data["plan"] ?? "free");
-  if (rawPlan !== "free" && isExpired(data["subscriptionExpiresAt"])) {
+  const plan =
+    normalizePlanId(subscription["plan"]) ??
+    normalizePlanId(data["subscriptionPlan"]) ??
+    normalizePlanId(data["plan"]) ??
+    "free";
+
+  const status = getSubscriptionStatus(data);
+  if (
+    plan !== "free" &&
+    status !== null &&
+    !["active", "trial", "trialing"].includes(status)
+  ) {
     return "free";
   }
 
-  return isPlanId(rawPlan) ? rawPlan : "free";
+  if (plan !== "free" && isExpired(getSubscriptionExpiryValue(data))) {
+    return "free";
+  }
+
+  return plan;
+}
+
+/** Returns the subscription expiry in an API-friendly ISO/string form. */
+export function getSubscriptionExpiresAt(
+  data: UserSubscriptionData,
+): string | null {
+  const value = getSubscriptionExpiryValue(data);
+  if (typeof value === "string") return value;
+
+  const timestamp = value as { toDate?: () => Date } | null;
+  if (typeof timestamp?.toDate === "function") {
+    return timestamp.toDate().toISOString();
+  }
+
+  return null;
 }
 
 export function getPlanLimits(plan: PlanId): PlanLimits {

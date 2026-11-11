@@ -1,5 +1,9 @@
 import { getDb } from "../lib/firebase.js";
-import { getPlanLimits, getUserPlan } from "./plan.service.js";
+import {
+  getPlanLimits,
+  getSubscriptionExpiresAt,
+  resolveUserPlan,
+} from "./plan.service.js";
 
 const COL_USERS = "users";
 
@@ -28,16 +32,13 @@ export const billingService = {
     ]);
 
     const userData = userSnap.data() ?? {};
-    const plan = await getUserPlan(userId);
+    const plan = resolveUserPlan(userData);
     const limits = getPlanLimits(plan);
     const usageData = usageSnap.data() ?? {};
 
     return {
       plan,
-      subscriptionExpiresAt:
-        typeof userData["subscriptionExpiresAt"] === "string"
-          ? userData["subscriptionExpiresAt"]
-          : null,
+      subscriptionExpiresAt: getSubscriptionExpiresAt(userData),
       limits,
       usageToday: {
         scanCount: Number(usageData["scanCount"] ?? 0),
